@@ -1,7 +1,14 @@
-# Minimal Dockerfile for Maven/Spring Boot
-FROM eclipse-temurin:21-jre
+# Build stage
+FROM maven:3.9.9-eclipse-temurin-21 AS builder
 WORKDIR /app
-COPY target/personal-ai-0.0.1-SNAPSHOT.jar app.jar
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:21-jdk-alpine
+WORKDIR /app
+COPY --from=builder /app/target/personal-ai-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app.jar"]
 
