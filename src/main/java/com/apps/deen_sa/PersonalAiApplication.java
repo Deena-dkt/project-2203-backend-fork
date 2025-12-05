@@ -14,4 +14,5 @@ public class PersonalAiApplication {
 		System.getProperties().put("server.port", port);
 		SpringApplication.run(PersonalAiApplication.class, args);
 	}
+
 }
