@@ -19,10 +19,7 @@ public class ExpenseLLMService {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    @Value("${spring.security.allowed-origins}")
-    private String openAiApiKey;
-
-    public ExpenseLLMService() {
+    public ExpenseLLMService(@Value("${openai.api-key}") String openAiApiKey) {
         this.client = OpenAIOkHttpClient.builder()
                 .apiKey(openAiApiKey)
                 .build();
