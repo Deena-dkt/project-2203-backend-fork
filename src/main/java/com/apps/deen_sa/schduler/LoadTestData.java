@@ -35,7 +35,7 @@ public class LoadTestData {
     // 1️⃣ Run immediately on startup
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
-        runTestPrompts();
+        //runTestPrompts();
     }
 
     @PostConstruct
