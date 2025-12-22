@@ -1,6 +1,8 @@
 package com.apps.deen_sa.dto;
 
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -62,4 +64,8 @@ public class ExpenseDto {
     private List<String> missingFields;
 
     private boolean sourceResolved;
+
+    private String paymentMethod;
+
+    private String spentAt;
 }
