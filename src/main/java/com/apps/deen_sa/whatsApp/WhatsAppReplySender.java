@@ -47,6 +47,7 @@ public class WhatsAppReplySender {
 
         try {
             restTemplate.postForEntity(url, request, String.class);
+            log.info("Successfully pushed the message-{} to {}", message, to);
         } catch (Exception e) {
             // swallow or log — webhook flow must never break
             log.error("Failed to send WhatsApp reply to {}", to, e);
