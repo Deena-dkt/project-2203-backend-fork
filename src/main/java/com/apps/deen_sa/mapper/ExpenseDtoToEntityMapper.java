@@ -72,6 +72,7 @@ public class ExpenseDtoToEntityMapper {
         }
 
         entity.setDetails(details);
+        entity.setCompletenessLevel(dto.getCompletenessLevelEnum());
 
         return entity;
     }

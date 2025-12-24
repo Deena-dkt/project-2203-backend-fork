@@ -10,10 +10,10 @@ public class ExpenseMerger {
      * Merge the non-null fields from "update" into "base".
      * This does NOT overwrite existing values unless LLM explicitly returned a non-null replacement.
      */
-    public static ExpenseDto merge(ExpenseDto base, ExpenseDto update) {
+    public static void merge(ExpenseDto base, ExpenseDto update) {
 
         if (update == null) {
-            return base;
+            return ;
         }
 
         // ---------- SIMPLE FIELDS ----------
@@ -63,6 +63,5 @@ public class ExpenseMerger {
             base.setTags(update.getTags());
         }
 
-        return base;
     }
 }

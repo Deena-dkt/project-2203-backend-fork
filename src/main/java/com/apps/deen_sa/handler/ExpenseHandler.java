@@ -93,7 +93,9 @@ public class ExpenseHandler implements SpeechHandler {
         if (level == CompletenessLevelEnum.OPERATIONAL) {
 
             TransactionEntity saved = saveExpense(dto);
-            saved.setNeedsEnrichment(false);
+            // based on the container, enrichment being handled.
+            saved.setNeedsEnrichment(saved.getSourceContainerId() == null);
+
             saved.setFinanciallyApplied(false);
             repo.save(saved);
             ctx.reset();
@@ -188,6 +190,9 @@ public class ExpenseHandler implements SpeechHandler {
 
             if (source != null) {
                 tx.setSourceContainerId(source.getId());
+            } else {
+                // since value is not present we need further enrichment later on
+                tx.setNeedsEnrichment(true);
             }
         }
 
@@ -259,37 +264,20 @@ public class ExpenseHandler implements SpeechHandler {
 
     private ValueContainerEntity resolveSourceContainer(ExpenseDto dto, Long userId) {
 
-        if (dto.getSourceAccount() == null) {
-            return null;
-        }
+        if (dto.getSourceAccount() == null) return null;
 
         List<ValueContainerEntity> containers =
                 valueContainerService.getActiveContainers(userId);
 
         List<ValueContainerEntity> matching =
                 containers.stream()
-                        .filter(c ->
-                                c.getContainerType()
-                                        .equals(dto.getSourceAccount())
-                        )
+                        .filter(c -> c.getContainerType().equals(dto.getSourceAccount()))
                         .toList();
 
-        if (matching.isEmpty()) {
-            throw new IllegalStateException(
-                    "No active value container found for source account type: "
-                            + dto.getSourceAccount()
-            );
-        }
+        if (matching.size() == 1) return matching.getFirst();
 
-        if (matching.size() > 1) {
-            throw new IllegalStateException(
-                    "Multiple value containers found for source account type: "
-                            + dto.getSourceAccount()
-                            + ". Ambiguous resolution."
-            );
-        }
-
-        return matching.getFirst();
+        // 0 or >1 → unresolved, not exceptional
+        return null;
     }
 
     private void applyFinancialImpact(TransactionEntity tx) {

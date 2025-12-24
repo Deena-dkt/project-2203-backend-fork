@@ -14,13 +14,16 @@ public class ExpenseCompletenessEvaluator {
         }
 
         if (!hasOperational(dto)) {
+            dto.setCompletenessLevelEnum(CompletenessLevelEnum.MINIMAL);
             return CompletenessLevelEnum.MINIMAL;
         }
 
         if (!hasFinancial(dto)) {
+            dto.setCompletenessLevelEnum(CompletenessLevelEnum.OPERATIONAL);
             return CompletenessLevelEnum.OPERATIONAL;
         }
 
+        dto.setCompletenessLevelEnum(CompletenessLevelEnum.FINANCIAL);
         return CompletenessLevelEnum.FINANCIAL;
     }
 
