@@ -24,3 +24,7 @@ management:
           - env
           - health
           - metrics
+
+whatsapp:
+  access-token: ${WHATSAPP_ACCESS_TOKEN}
+  phone-number-id:  ${WHATSAPP_PHONE_NUMBER_ID}
