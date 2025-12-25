@@ -21,11 +21,11 @@ public class WhatsAppMessageProcessor {
     public void processIncomingMessage(String from, String text) {
 
         try {
-            log.info("Received message - {} from {}", from, text);
+            log.info("Received message - {} from {}", text, from);
             SpeechResult result =
                     orchestrator.process(text, conversationContext);
 
-            log.info("Processed message - {} from {} and reply is ready - {}", from, text, result.getMessage());
+            log.info("Processed message - {} from {} and reply is ready - {}", text, from, result.getMessage());
 
             if (result.getMessage() != null) {
                 replySender.sendTextReply(from, result.getMessage());
