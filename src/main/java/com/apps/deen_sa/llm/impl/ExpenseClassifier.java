@@ -1,6 +1,6 @@
 package com.apps.deen_sa.llm.impl;
 
-import com.apps.deen_sa.Registry.ExpenseTaxonomyRegistry;
+import com.apps.deen_sa.registry.ExpenseTaxonomyRegistry;
 import com.apps.deen_sa.dto.ExpenseDto;
 import com.apps.deen_sa.exception.LLMParsingException;
 import com.apps.deen_sa.llm.BaseLLMExtractor;

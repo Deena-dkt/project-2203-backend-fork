@@ -1,4 +1,4 @@
-package com.apps.deen_sa.Registry;
+package com.apps.deen_sa.registry;
 
 import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;

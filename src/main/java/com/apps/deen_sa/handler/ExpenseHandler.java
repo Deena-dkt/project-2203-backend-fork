@@ -1,5 +1,6 @@
 package com.apps.deen_sa.handler;
 
+import com.apps.deen_sa.dto.AdjustmentCommand;
 import com.apps.deen_sa.dto.ExpenseDto;
 import com.apps.deen_sa.entity.TransactionEntity;
 import com.apps.deen_sa.entity.ValueContainerEntity;
@@ -10,8 +11,12 @@ import com.apps.deen_sa.orchestrator.ConversationContext;
 import com.apps.deen_sa.orchestrator.SpeechHandler;
 import com.apps.deen_sa.orchestrator.SpeechResult;
 import com.apps.deen_sa.repo.TransactionRepository;
+import com.apps.deen_sa.resolver.AdjustmentCommandFactory;
+import com.apps.deen_sa.resolver.ValueAdjustmentStrategyResolver;
 import com.apps.deen_sa.service.TagNormalizationService;
+import com.apps.deen_sa.service.ValueAdjustmentService;
 import com.apps.deen_sa.service.ValueContainerService;
+import com.apps.deen_sa.strategy.ValueAdjustmentStrategy;
 import com.apps.deen_sa.utils.CompletenessLevelEnum;
 import com.apps.deen_sa.utils.ExpenseMerger;
 import com.apps.deen_sa.validator.ExpenseValidator;
@@ -33,6 +38,8 @@ public class ExpenseHandler implements SpeechHandler {
     private final TagNormalizationService tagNormalizationService;
     private final ValueContainerService valueContainerService;
     private final ExpenseCompletenessEvaluator completenessEvaluator;
+    private final AdjustmentCommandFactory adjustmentCommandFactory;
+    private final ValueAdjustmentService valueAdjustmentService;
 
     @Override
     public String intentType() {
@@ -96,7 +103,14 @@ public class ExpenseHandler implements SpeechHandler {
             // based on the container, enrichment being handled.
             saved.setNeedsEnrichment(saved.getSourceContainerId() == null);
 
-            saved.setFinanciallyApplied(false);
+            // ✅ APPLY FINANCIAL IMPACT IF POSSIBLE
+            if (saved.getSourceContainerId() != null
+                    && !saved.isFinanciallyApplied()) {
+
+                applyFinancialImpact(saved);
+                saved.setFinanciallyApplied(true);
+            }
+
             repo.save(saved);
             ctx.reset();
 
@@ -199,7 +213,7 @@ public class ExpenseHandler implements SpeechHandler {
         // ----------------------------
         // Step H – Apply financial impact exactly once
         // ----------------------------
-        if (newLevel == CompletenessLevelEnum.FINANCIAL
+        if (tx.getSourceContainerId() != null
                 && !tx.isFinanciallyApplied()) {
 
             applyFinancialImpact(tx);
@@ -274,17 +288,15 @@ public class ExpenseHandler implements SpeechHandler {
                         .filter(c -> c.getContainerType().equals(dto.getSourceAccount()))
                         .toList();
 
-        if (matching.size() == 1) return matching.getFirst();
-
-        // 0 or >1 → unresolved, not exceptional
-        return null;
+        return matching.size() == 1 ? matching.getFirst() : null;
     }
 
+    // =====================================================
+    // FINANCIAL APPLICATION (SINGLE SOURCE)
+    // =====================================================
     private void applyFinancialImpact(TransactionEntity tx) {
 
-        if (tx.isFinanciallyApplied()) {
-            return; // idempotency guard
-        }
+        if (tx.isFinanciallyApplied()) return;
 
         if (tx.getSourceContainerId() == null) {
             throw new IllegalStateException(
@@ -293,76 +305,13 @@ public class ExpenseHandler implements SpeechHandler {
         }
 
         ValueContainerEntity container =
-                valueContainerService.findValueContainerById(tx.getSourceContainerId());
+                valueContainerService.findValueContainerById(
+                        tx.getSourceContainerId()
+                );
 
-        BigDecimal amount = tx.getAmount();
+        AdjustmentCommand command =
+                adjustmentCommandFactory.forExpense(tx);
 
-        if (amount == null || amount.signum() <= 0) {
-            throw new IllegalStateException("Invalid transaction amount");
-        }
-
-        switch (container.getContainerType()) {
-
-            case "CASH", "BANK" -> {
-                applyDebit(container, amount);
-            }
-
-            case "CREDIT" -> {
-                applyCreditSpend(container, amount);
-            }
-
-            default -> throw new IllegalStateException(
-                    "Unsupported container type: " + container.getContainerType()
-            );
-        }
-
-        container.setLastActivityAt(Instant.now());
-        valueContainerService.UpdateValueContainer(container);
-    }
-
-    private void applyDebit(ValueContainerEntity container,
-                            BigDecimal amount) {
-
-        BigDecimal available = container.getAvailableValue();
-
-        if (available == null) {
-            throw new IllegalStateException(
-                    "Available value is null for container " + container.getId()
-            );
-        }
-
-        BigDecimal newAvailable = available.subtract(amount);
-
-        container.setAvailableValue(newAvailable);
-        container.setCurrentValue(newAvailable); // keep them aligned for debit accounts
-    }
-
-    private void applyCreditSpend(ValueContainerEntity container,
-                                  BigDecimal amount) {
-
-        BigDecimal available = container.getAvailableValue();
-
-        if (available == null) {
-            throw new IllegalStateException(
-                    "Available credit is null for container " + container.getId()
-            );
-        }
-
-        // Reduce available credit
-        container.setAvailableValue(available.subtract(amount));
-
-        // Increase outstanding in details
-        Map<String, Object> details =
-                container.getDetails() != null
-                        ? new HashMap<>(container.getDetails())
-                        : new HashMap<>();
-
-        BigDecimal outstanding =
-                details.get("outstanding") instanceof Number n
-                        ? new BigDecimal(n.toString())
-                        : BigDecimal.ZERO;
-
-        details.put("outstanding", outstanding.add(amount));
-        container.setDetails(details);
+        valueAdjustmentService.apply(container, command);
     }
 }

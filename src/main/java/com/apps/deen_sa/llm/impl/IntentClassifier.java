@@ -9,13 +9,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class IntentClassifier extends BaseLLMExtractor {
 
-    private final PromptLoader promptLoader;
-
     private final String systemPrompt;
 
     protected IntentClassifier(OpenAIClient client, PromptLoader promptLoader) {
         super(client);
-        this.promptLoader = promptLoader;
 
         this.systemPrompt = promptLoader.combine(
                 "llm/common/global_rules.md",
