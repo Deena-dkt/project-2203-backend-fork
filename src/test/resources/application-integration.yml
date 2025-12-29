@@ -13,6 +13,13 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+openai:
+  api-key: ${OPENAI_API_KEY:test-api-key}
+
+whatsapp:
+  access-token: ${WHATSAPP_ACCESS_TOKEN:test-access-token}
+  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:test-phone-id}
+
 logging:
   level:
     root: INFO
