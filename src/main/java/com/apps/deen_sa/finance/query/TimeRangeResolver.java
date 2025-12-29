@@ -1,4 +1,4 @@
-package com.apps.deen_sa.resolver;
+package com.apps.deen_sa.finance.query;
 
 import com.apps.deen_sa.dto.TimeRange;
 import org.springframework.stereotype.Component;

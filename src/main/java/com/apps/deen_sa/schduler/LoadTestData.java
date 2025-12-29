@@ -31,7 +31,7 @@ public class LoadTestData {
     private void runTestPrompts() {
         for (String prompt : prompts) {
             log.info("Processing test prompt: {}", prompt);
-            //orchestrator.process(prompt, conversationContext);
+            orchestrator.process(prompt, conversationContext);
         }
     }
 
