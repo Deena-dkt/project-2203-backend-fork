@@ -9,9 +9,12 @@ import com.apps.deen_sa.core.value.ValueContainerRepo;
 import com.apps.deen_sa.core.value.ValueAdjustmentRepository;
 import com.apps.deen_sa.core.transaction.TransactionRepository;
 import com.apps.deen_sa.assertions.FinancialAssertions;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,6 +24,9 @@ import java.util.Map;
 
 @Import(LLMTestConfiguration.class)
 public class FuzzSimulationIT extends IntegrationTestBase {
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Autowired
     ValueContainerRepo valueContainerRepo;
@@ -160,12 +166,18 @@ public class FuzzSimulationIT extends IntegrationTestBase {
     /**
      * Clean up test data after each iteration to prevent database bloat
      * and potential connection issues during long-running fuzz tests.
+     * Uses @Transactional to ensure proper transaction management and connection release.
      */
+    @Transactional
     private void cleanupTestData() {
         // Delete all test data in reverse order of dependencies
         valueAdjustmentRepository.deleteAll();
         transactionRepository.deleteAll();
         valueContainerRepo.deleteAll();
+        
+        // Flush and clear the persistence context to release database connections
+        entityManager.flush();
+        entityManager.clear();
     }
     
 }
