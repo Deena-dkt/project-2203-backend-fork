@@ -12,6 +12,7 @@ import com.apps.deen_sa.assertions.FinancialAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,6 +22,9 @@ import java.util.Map;
 
 @Import(LLMTestConfiguration.class)
 public class FuzzSimulationIT extends IntegrationTestBase {
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     ValueContainerRepo valueContainerRepo;
@@ -160,12 +164,17 @@ public class FuzzSimulationIT extends IntegrationTestBase {
     /**
      * Clean up test data after each iteration to prevent database bloat
      * and potential connection issues during long-running fuzz tests.
+     * Uses TransactionTemplate to ensure proper transaction management and connection release.
      */
     private void cleanupTestData() {
-        // Delete all test data in reverse order of dependencies
-        valueAdjustmentRepository.deleteAll();
-        transactionRepository.deleteAll();
-        valueContainerRepo.deleteAll();
+        transactionTemplate.execute(status -> {
+            // Delete all test data in reverse order of dependencies
+            valueAdjustmentRepository.deleteAll();
+            transactionRepository.deleteAll();
+            valueContainerRepo.deleteAll();
+            // No need to manually flush - Spring will handle transaction commit
+            return null;
+        });
     }
     
 }

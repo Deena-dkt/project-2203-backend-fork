@@ -99,12 +99,117 @@ All integration tests enforce the following financial invariants after each simu
 
 ## Testcontainers Configuration
 
+### Container Lifecycle (Singleton Pattern)
+
+**REQUIRED**: All integration tests must use the singleton Testcontainers pattern to prevent connection pool exhaustion:
+
+```java
+public abstract class IntegrationTestBase {
+    static PostgreSQLContainer<?> postgres;
+    
+    static {
+        postgres = new PostgreSQLContainer<>("postgres:16")
+                .withDatabaseName("integration_db")
+                .withUsername("test")
+                .withPassword("test")
+                .waitingFor(Wait.forListeningPort())
+                .withStartupTimeout(Duration.ofSeconds(60))
+                .withReuse(true);  // Enable container reuse
+        postgres.start();
+    }
+}
+```
+
+**Key Points**:
 - Uses **PostgreSQL 16** (pinned version for consistency)
-- Isolated database per test class
-- Automatic cleanup after tests
+- **Single shared container** across all test classes
+- Container reuse enabled with `.withReuse(true)`
+- No `@Testcontainers` or `@Container` annotations (manual lifecycle)
 - Dynamic property configuration via `@DynamicPropertySource`
 
+### Container Reuse Setup
+
+To enable container reuse, create `~/.testcontainers.properties`:
+```properties
+testcontainers.reuse.enable=true
+```
+
+This prevents creating new containers for each test class, reducing test execution time and avoiding connection pool issues.
+
+## HikariCP Connection Pool Configuration
+
+### Required Settings
+
+Integration tests use optimized HikariCP settings to prevent connection timeout issues during long-running fuzz tests:
+
+```java
+@DynamicPropertySource
+static void registerDatasourceProperties(DynamicPropertyRegistry registry) {
+    // ... datasource URL, username, password
+    
+    // HikariCP configuration
+    registry.add("spring.datasource.hikari.maximum-pool-size", () -> "20");
+    registry.add("spring.datasource.hikari.minimum-idle", () -> "5");
+    registry.add("spring.datasource.hikari.connection-timeout", () -> "60000"); // 60s
+    registry.add("spring.datasource.hikari.max-lifetime", () -> "1800000"); // 30 min
+    registry.add("spring.datasource.hikari.idle-timeout", () -> "300000"); // 5 min
+    registry.add("spring.datasource.hikari.leak-detection-threshold", () -> "30000"); // 30s
+    registry.add("spring.datasource.hikari.validation-timeout", () -> "5000");
+    registry.add("spring.datasource.hikari.connection-test-query", () -> "SELECT 1");
+}
+```
+
+**Rationale**:
+- **Larger pool size (20)**: Handles concurrent operations during fuzz tests
+- **Higher minimum idle (5)**: Maintains ready connections
+- **Longer connection timeout (60s)**: Prevents premature timeouts during heavy load
+- **Shorter idle timeout (5min)**: Releases unused connections faster
+- **Aggressive leak detection (30s)**: Identifies connection leaks early
+
+### Transaction Management for Cleanup
+
+**REQUIRED**: Use `TransactionTemplate` for test data cleanup to ensure proper connection release:
+
+```java
+@Autowired
+private TransactionTemplate transactionTemplate;
+
+private void cleanupTestData() {
+    transactionTemplate.execute(status -> {
+        // Delete in reverse order of dependencies
+        valueAdjustmentRepository.deleteAll();
+        transactionRepository.deleteAll();
+        valueContainerRepo.deleteAll();
+        // Spring handles transaction commit and connection release
+        return null;
+    });
+}
+```
+
+**Why This Matters**:
+- Without explicit transaction management, connections may leak during cleanup
+- `TransactionTemplate` ensures proper commit/rollback and connection release
+- Critical for long-running tests with many iterations (e.g., 50+ fuzz iterations)
+
+**Anti-Pattern (DO NOT USE)**:
+```java
+// ❌ This can leak connections
+private void cleanupTestData() {
+    valueAdjustmentRepository.deleteAll();
+    transactionRepository.deleteAll();
+    valueContainerRepo.deleteAll();
+}
+```
+
 ## Troubleshooting
+
+### Connection Pool Exhaustion
+If you see "Connection is not available, request timed out after XXXms":
+
+1. **Verify singleton pattern**: Ensure `IntegrationTestBase` uses manual container lifecycle (no `@Container`)
+2. **Check transaction management**: Cleanup methods must use `TransactionTemplate`
+3. **Enable container reuse**: Set `testcontainers.reuse.enable=true` in `~/.testcontainers.properties`
+4. **Review pool settings**: Ensure HikariCP configuration matches recommended values above
 
 ### Docker Not Available
 If you see "Could not find a valid Docker environment", ensure Docker is running:
@@ -128,12 +233,23 @@ docker ps -a | grep testcontainers | awk '{print $1}' | xargs docker rm -f
 
 ## Best Practices
 
-1. **Always run integration tests before committing** financial logic changes
-2. **Use descriptive scenario names** in simulations
-3. **Add new invariants** if you discover edge cases
+### Architecture & Infrastructure
+1. **Use singleton Testcontainers pattern** - Manual lifecycle with `.withReuse(true)`
+2. **Always use TransactionTemplate** for test data cleanup in long-running tests
+3. **Configure HikariCP properly** - Use recommended pool sizes and timeouts
 4. **Never mock repositories** in integration tests - use real services
-5. **Keep fuzz seeds reproducible** for debugging
-6. **Document financial assumptions** in test comments
+
+### Test Development
+5. **Always run integration tests before committing** financial logic changes
+6. **Use descriptive scenario names** in simulations
+7. **Add new invariants** if you discover edge cases
+8. **Keep fuzz seeds reproducible** for debugging
+9. **Document financial assumptions** in test comments
+
+### Connection Management
+10. **Clean up test data after iterations** - Prevents database bloat and connection leaks
+11. **Monitor connection pool metrics** - Watch for leak detection warnings
+12. **Test with realistic iteration counts** - Run locally with 50+ fuzz iterations before PR
 
 ## Simulation Example
 
