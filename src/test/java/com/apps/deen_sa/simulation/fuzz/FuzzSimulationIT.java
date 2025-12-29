@@ -10,8 +10,10 @@ import com.apps.deen_sa.core.value.ValueAdjustmentRepository;
 import com.apps.deen_sa.core.transaction.TransactionRepository;
 import com.apps.deen_sa.assertions.FinancialAssertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 @Import(LLMTestConfiguration.class)
+@Transactional
 public class FuzzSimulationIT extends IntegrationTestBase {
 
     @Autowired
@@ -57,6 +60,9 @@ public class FuzzSimulationIT extends IntegrationTestBase {
 
             try {
                 runOne(seed, actionsPerRun);
+                
+                // Clean up data after each iteration to prevent database bloat
+                cleanupTestData();
             } catch (AssertionError | Exception e) {
                 System.err.println("====================================");
                 System.err.println("FUZZ SIMULATION FAILURE");
@@ -154,5 +160,15 @@ public class FuzzSimulationIT extends IntegrationTestBase {
         }
     }
 
+    /**
+     * Clean up test data after each iteration to prevent database bloat
+     * and potential connection issues during long-running fuzz tests.
+     */
+    private void cleanupTestData() {
+        // Delete all test data in reverse order of dependencies
+        valueAdjustmentRepository.deleteAll();
+        transactionRepository.deleteAll();
+        valueContainerRepo.deleteAll();
+    }
     
 }
