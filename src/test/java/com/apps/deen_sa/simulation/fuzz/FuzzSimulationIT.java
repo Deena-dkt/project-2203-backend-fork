@@ -12,7 +12,6 @@ import com.apps.deen_sa.assertions.FinancialAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 @Import(LLMTestConfiguration.class)
-@Transactional
 public class FuzzSimulationIT extends IntegrationTestBase {
 
     @Autowired
