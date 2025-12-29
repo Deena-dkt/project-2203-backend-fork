@@ -1,7 +1,7 @@
 package com.apps.deen_sa.schduler;
 
-import com.apps.deen_sa.orchestrator.ConversationContext;
-import com.apps.deen_sa.orchestrator.SpeechOrchestrator;
+import com.apps.deen_sa.conversation.ConversationContext;
+import com.apps.deen_sa.conversation.SpeechOrchestrator;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.context.event.ApplicationReadyEvent;

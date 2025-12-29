@@ -1,6 +1,6 @@
 package com.apps.deen_sa.dto;
 
-import com.apps.deen_sa.entity.ExpenseEntity;
+import com.apps.deen_sa.finance.expense.ExpenseEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
