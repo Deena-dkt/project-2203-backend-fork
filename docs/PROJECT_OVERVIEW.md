@@ -103,6 +103,9 @@ src/main/java/com/apps/deen_sa/
 │   ├── loan/                           # Loan analysis subdomain
 │   │   └── LoanAnalysisService.java
 │   │
+│   ├── payment/                        # Liability payment subdomain
+│   │   └── LiabilityPaymentHandler.java
+│   │
 │   ├── query/                          # Query & analytics subdomain
 │   │   ├── QueryHandler.java
 │   │   ├── ExpenseQueryBuilder.java
@@ -122,7 +125,8 @@ src/main/java/com/apps/deen_sa/
 │           ├── AdjustmentCommandFactory.java
 │           ├── CreditSettlementStrategy.java
 │           ├── CashLikeStrategy.java
-│           └── CreditCardStrategy.java
+│           ├── CreditCardStrategy.java
+│           └── LoanStrategy.java
 │
 ├── food/                                # 🥘 FOOD DOMAIN (reserved for future)
 │   ├── recipe/                         # (empty)
@@ -138,6 +142,7 @@ src/main/java/com/apps/deen_sa/
 │       ├── ExpenseClassifier.java
 │       ├── QueryClassifier.java
 │       ├── AccountSetupClassifier.java
+│       ├── LiabilityPaymentClassifier.java
 │       ├── TagSemanticMatcher.java
 │       ├── LoanQueryExplainer.java
 │       └── ExpenseSummaryExplainer.java
@@ -177,6 +182,9 @@ src/main/resources/
 │   │   └── followup_refinement.md
 │   ├── intent/
 │   │   ├── classify.md
+│   │   └── schema.json
+│   ├── payment/
+│   │   ├── extract.md
 │   │   └── schema.json
 │   └── query/
 │       ├── classify.md
@@ -228,13 +236,35 @@ User Input (Voice/Text)
   → Return SpeechResult
 ```
 
+### 1a. Liability Payment Flow (Credit Cards & Loans)
+```
+User Input: "Paid 25,000 to credit card"
+  → WhatsApp/Speech Controller
+  → SpeechOrchestrator
+  → IntentClassifier (LLM) → LIABILITY_PAYMENT
+  → LiabilityPaymentHandler
+  → LiabilityPaymentClassifier (LLM) - Extract payment details
+  → Resolve Source Container (Bank Account)
+  → Resolve Target Container (Credit Card/Loan)
+  → Create TransactionEntity (type=TRANSFER)
+  → Apply Financial Impact:
+      • DEBIT source (bank account reduces)
+      • CREDIT target (liability outstanding reduces)
+  → Create ValueAdjustmentEntity audit trail
+  → Mark Transaction as financiallyApplied=true
+  → Return SpeechResult
+```
+
+**Important**: Liability payments are TRANSFER transactions, NOT expenses. They do not appear in expense analytics.
+
 ### 2. Intent Classification
 User inputs are classified into:
-- **EXPENSE**: Spending money or making payments
+- **EXPENSE**: Spending money on goods/services
 - **QUERY**: Asking about past transactions
 - **INCOME**: Money coming in
 - **INVESTMENT**: Investment activities
 - **TRANSFER**: Moving money between accounts
+- **LIABILITY_PAYMENT**: Paying credit cards or loans (NOT expenses)
 - **ACCOUNT_SETUP**: Creating/declaring financial containers
 - **UNKNOWN**: Unclear intent
 

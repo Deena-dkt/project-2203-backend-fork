@@ -48,6 +48,9 @@ com.apps.deen_sa
 │   ├── loan
 │   │   └── LoanAnalysisService
 │   │
+│   ├── payment
+│   │   └── LiabilityPaymentHandler
+│   │
 │   ├── query
 │   │   ├── QueryHandler
 │   │   ├── ExpenseQueryBuilder
@@ -67,7 +70,8 @@ com.apps.deen_sa
 │           ├── ValueAdjustmentStrategy
 │           ├── CreditSettlementStrategy
 │           ├── CashLikeStrategy
-│           └── CreditCardStrategy
+│           ├── CreditCardStrategy
+│           └── LoanStrategy
 │
 ├── food (Reserved for Future)
 │   ├── recipe (empty)
