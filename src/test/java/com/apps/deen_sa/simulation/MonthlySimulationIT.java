@@ -67,6 +67,8 @@ public class MonthlySimulationIT extends IntegrationTestBase {
         // --- Assertions: capture invariants ---
         FinancialAssertions.assertNoOrphanAdjustments(valueAdjustmentRepository, transactionRepository);
         FinancialAssertions.assertAdjustmentsMatchTransactions(transactionRepository, valueAdjustmentRepository);
+        FinancialAssertions.assertNoNegativeBalances(valueContainerRepo);
+        FinancialAssertions.assertCapacityLimitsRespected(valueContainerRepo);
 
         // Capture opening balances at start of simulation: for this test we treat containers that exist now as 'opening' after setup
         Map<Long, BigDecimal> opening = valueContainerRepo.findAll().stream()
