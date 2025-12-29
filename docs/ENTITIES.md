@@ -295,9 +295,16 @@ currency: null
 ## Enum Definitions
 
 ### TransactionTypeEnum
-Located in `utils/TransactionTypeEnum.java`
+Located in `core/transaction/TransactionTypeEnum.java`
 - Defines valid transaction types
-- Examples: EXPENSE, INCOME, TRANSFER, INVESTMENT
+- Examples: 
+  - **EXPENSE**: Spending on goods/services
+  - **INCOME**: Money received
+  - **TRANSFER**: Moving money between containers (e.g., bank → credit card payment, bank → loan payment)
+  - **INVESTMENT**: Investment transactions
+  - **LOAN_PAYMENT**: Legacy (prefer TRANSFER with LIABILITY_PAYMENT intent)
+  
+**Note**: Credit card and loan payments use TRANSFER type (not EXPENSE) to correctly reflect the accounting principle that principal repayment is a transfer between containers, not an expense.
 
 ### CompletenessLevelEnum
 Located in `utils/CompletenessLevelEnum.java`

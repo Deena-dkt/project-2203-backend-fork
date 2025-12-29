@@ -1,4 +1,4 @@
-package com.apps.deen_sa.resolver;
+package com.apps.deen_sa.finance.query;
 
 import com.apps.deen_sa.dto.ExpenseQuery;
 import com.apps.deen_sa.dto.QueryResult;

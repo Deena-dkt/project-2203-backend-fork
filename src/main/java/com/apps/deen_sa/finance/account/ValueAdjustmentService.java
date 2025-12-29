@@ -1,4 +1,4 @@
-package com.apps.deen_sa.service;
+package com.apps.deen_sa.finance.account;
 
 import com.apps.deen_sa.dto.AdjustmentCommand;
 import com.apps.deen_sa.core.value.ValueAdjustmentEntity;

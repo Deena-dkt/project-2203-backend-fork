@@ -1,4 +1,4 @@
-package com.apps.deen_sa.whatsApp;
+package com.apps.deen_sa.conversation;
 
 import com.apps.deen_sa.conversation.ConversationContext;
 import com.apps.deen_sa.conversation.SpeechOrchestrator;
