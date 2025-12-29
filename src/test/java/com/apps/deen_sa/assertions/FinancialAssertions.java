@@ -140,4 +140,14 @@ public final class FinancialAssertions {
             }
         }
     }
+
+    public static void assertAllTransactionsHaveValidStatus(TransactionRepository txRepo) {
+        List<TransactionEntity> txs = txRepo.findAll();
+        for (TransactionEntity tx : txs) {
+            assertNotNull(tx.getTransactionType(), "Transaction " + tx.getId() + " has null transaction type");
+            assertNotNull(tx.getAmount(), "Transaction " + tx.getId() + " has null amount");
+            assertTrue(tx.getAmount().compareTo(BigDecimal.ZERO) >= 0, 
+                "Transaction " + tx.getId() + " has negative amount: " + tx.getAmount());
+        }
+    }
 }

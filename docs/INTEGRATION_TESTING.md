@@ -66,7 +66,8 @@ All integration tests enforce the following financial invariants after each simu
 4. **Money Conservation**: Total money across all containers must remain constant
 5. **No Negative Balances**: Asset accounts (BANK_ACCOUNT, CASH) cannot have negative balances
 6. **Capacity Limits**: Liability accounts (CREDIT_CARD, LOAN) must respect capacity limits
-7. **Idempotency**: Re-running the same simulation must produce identical results
+7. **Transaction Validity**: All transactions must have valid type, non-null amount, and non-negative amount
+8. **Idempotency**: Re-running the same simulation must produce identical results
 
 ## Test Structure
 

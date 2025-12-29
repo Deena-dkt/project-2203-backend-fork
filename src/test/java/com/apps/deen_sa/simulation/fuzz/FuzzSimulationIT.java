@@ -121,6 +121,7 @@ public class FuzzSimulationIT extends IntegrationTestBase {
         FinancialAssertions.assertAdjustmentsMatchTransactions(transactionRepository, valueAdjustmentRepository);
         FinancialAssertions.assertNoNegativeBalances(valueContainerRepo);
         FinancialAssertions.assertCapacityLimitsRespected(valueContainerRepo);
+        FinancialAssertions.assertAllTransactionsHaveValidStatus(transactionRepository);
 
         // per-container balance integrity
         for (ValueContainerEntity v : valueContainerRepo.findAll()) {
