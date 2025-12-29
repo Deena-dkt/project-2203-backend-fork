@@ -172,7 +172,6 @@ public class FuzzSimulationIT extends IntegrationTestBase {
             valueAdjustmentRepository.deleteAll();
             transactionRepository.deleteAll();
             valueContainerRepo.deleteAll();
-            
             // No need to manually flush - Spring will handle transaction commit
             return null;
         });
