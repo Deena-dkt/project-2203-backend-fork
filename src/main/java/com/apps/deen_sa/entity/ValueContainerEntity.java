@@ -109,4 +109,10 @@ public class ValueContainerEntity {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @Column(nullable = false)
+    private Boolean overLimit = false;   // true if usage exceeds capacity
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal overLimitAmount; // how much exceeded
 }
