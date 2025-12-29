@@ -1,9 +1,11 @@
 prompts:
+  - "Setup my HDFC bank account where i have currently 1L rs balance"
+  - "Setup my ICICI credit card where i have 30K limit and outstanding is 0 and due date is 21st of every month and rs"
+
   # Housing / Rent / Home
-  - "Paid house rent of 22000 via bank transfer"
+  - "Paid house rent of 16000 via bank transfer"
   - "Apartment maintenance charges paid by UPI, 3500"
   - "Bought a small table for home from IKEA online for 4200 using credit card"
-  - "Paid advance amount for the new house, 50000 through bank transfer"
 
   # Utilities
   - "Paid BESCOM electricity bill of 1850 using UPI"

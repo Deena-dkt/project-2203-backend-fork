@@ -1,8 +1,9 @@
 package com.apps.deen_sa.schduler;
 
-import com.apps.deen_sa.orchestrator.ConversationContext;
-import com.apps.deen_sa.orchestrator.SpeechOrchestrator;
+import com.apps.deen_sa.conversation.ConversationContext;
+import com.apps.deen_sa.conversation.SpeechOrchestrator;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@Log4j2
 public class LoadTestData {
 
     private final SpeechOrchestrator orchestrator;
@@ -28,14 +30,15 @@ public class LoadTestData {
     // Core logic (reused)
     private void runTestPrompts() {
         for (String prompt : prompts) {
-            orchestrator.process(prompt, conversationContext);
+            log.info("Processing test prompt: {}", prompt);
+            //orchestrator.process(prompt, conversationContext);
         }
     }
 
     // 1️⃣ Run immediately on startup
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
-        //runTestPrompts();
+        runTestPrompts();
     }
 
     @PostConstruct
