@@ -47,7 +47,7 @@ public abstract class BaseLLMExtractor {
 
         ChatCompletion completion = client.chat().completions().create(params);
 
-        return completion.choices().getFirst()
+        return completion.choices().get(0)
                 .message()
                 .content()
                 .orElseThrow(() -> new RuntimeException("LLM returned no content"));

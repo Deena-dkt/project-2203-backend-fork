@@ -75,7 +75,7 @@ public class ExpenseHandler implements SpeechHandler {
 
             // If there are missing fields, guide the user
             if (!missing.isEmpty()) {
-                String nextField = missing.getFirst();
+                String nextField = missing.get(0);
                 String followupQ =
                         llm.generateFollowupQuestionForExpense(nextField, dto);
 
@@ -233,7 +233,7 @@ public class ExpenseHandler implements SpeechHandler {
 
         if (!stillMissing.isEmpty()) {
 
-            String nextField = stillMissing.getFirst();
+            String nextField = stillMissing.get(0);
             String followupQ =
                     llm.generateFollowupQuestionForExpense(nextField, dto);
 
@@ -288,7 +288,7 @@ public class ExpenseHandler implements SpeechHandler {
                         .filter(c -> c.getContainerType().equals(dto.getSourceAccount()))
                         .toList();
 
-        return matching.size() == 1 ? matching.getFirst() : null;
+        return matching.size() == 1 ? matching.get(0) : null;
     }
 
     // =====================================================

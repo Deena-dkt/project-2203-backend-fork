@@ -43,7 +43,7 @@ public class AccountSetupHandler implements SpeechHandler {
         List<String> missing = AccountSetupValidator.findMissingFields(dto);
 
         if (!missing.isEmpty()) {
-            String next = missing.getFirst();
+            String next = missing.get(0);
 
             ctx.setActiveIntent(intentType());
             ctx.setWaitingForField(next);
@@ -78,7 +78,7 @@ public class AccountSetupHandler implements SpeechHandler {
         List<String> missing = AccountSetupValidator.findMissingFields(dto);
 
         if (!missing.isEmpty()) {
-            String next = missing.getFirst();
+            String next = missing.get(0);
             ctx.setWaitingForField(next);
 
             return SpeechResult.followup(

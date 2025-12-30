@@ -67,7 +67,7 @@ public class LoanAnalysisService {
         }
 
         // 3️⃣ Single loan or already resolved
-        ValueContainerEntity loan = activeLoans.getFirst();
+        ValueContainerEntity loan = activeLoans.get(0);
 
         return computeAndRespond(loan);
     }
