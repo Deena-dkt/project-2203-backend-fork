@@ -435,6 +435,214 @@ void rerunSimulationIsIdempotent() {
 
 ---
 
+---
+
+## 6. Phase 1: Intent Ingestion & Staging Contract
+
+**This section defines the contract for Phase 1 intent ingestion.**
+
+### Intent Inbox Purpose
+
+The `user_intent_inbox` table is a **staging area** for all incoming user intents.
+
+- Acts as a write-ahead log
+- Ensures durability before processing
+- Enables immediate acknowledgment
+- Prevents data loss on processing failures
+
+### Intent Inbox Schema
+
+Table: `user_intent_inbox`
+
+Required columns (exact schema):
+- `id` - Primary key
+- `user_id` - User identifier (VARCHAR)
+- `channel` - Origin channel (e.g., WHATSAPP, WEB)
+- `correlation_id` - Unique deduplication key
+- `raw_text` - Original user input
+- `received_at` - Timestamp of receipt
+- `detected_intent` - Intent type (nullable, set after classification)
+- `intent_confidence` - Classification confidence (nullable)
+- `status` - Processing status (PENDING, PROCESSING, COMPLETED, FAILED, IGNORED)
+- `status_reason` - Explanation for status
+- `missing_fields` - JSON of missing required fields
+- `processing_attempts` - Retry counter
+- `last_processed_at` - Last processing timestamp
+
+### Intent Inbox Invariants
+
+These rules must hold for all intent ingestion:
+
+#### Invariant 1: Immediate Persistence
+
+User intents must be persisted to `user_intent_inbox` **immediately** upon receipt.
+
+- Persistence happens **before** any processing
+- Persistence happens **before** LLM calls
+- Persistence enables immediate acknowledgment (< 500ms)
+
+Example:
+- Given: WhatsApp webhook receives "spent 500 on groceries"
+- When: Message handler is invoked
+- Then: Intent is persisted to inbox **first**
+- And: 200 OK is returned to webhook **immediately**
+- And: Processing happens **asynchronously** after acknowledgment
+
+#### Invariant 2: Raw Text Immutability
+
+The `raw_text` field must **never be mutated** after creation.
+
+- `raw_text` is the source of truth
+- Processing may fail and retry - original text must be preserved
+- Enrichment goes into other fields, not raw_text
+
+Example:
+- Given: Intent with `raw_text = "dinner 300"`
+- When: LLM extracts amount=300, category=FOOD
+- Then: `raw_text` remains "dinner 300"
+- And: Extracted data goes to transaction table, not inbox
+
+#### Invariant 3: No Financial Data in Inbox
+
+The `user_intent_inbox` table stores **NO financial data**.
+
+- No amounts, balances, or transactions
+- No account references or container IDs
+- Intent inbox is pre-financial stage
+
+Prohibited fields in `user_intent_inbox`:
+- ❌ `amount`
+- ❌ `balance`
+- ❌ `account_id`
+- ❌ `container_id`
+- ❌ `transaction_id`
+
+#### Invariant 4: No Inline Handler Execution
+
+Persistence to inbox must **NOT execute financial handlers**.
+
+- Saving intent does NOT create transactions
+- Saving intent does NOT adjust balances
+- Saving intent does NOT call LLMs
+- Processing happens separately, asynchronously
+
+Example:
+```java
+// ✅ CORRECT
+UserIntentInboxEntity intent = intentInboxService.persistIntent(userId, channel, rawText);
+return ResponseEntity.ok().build(); // Immediate ack
+
+// Later, async:
+orchestrator.process(intent); // Processing happens separately
+
+// ❌ WRONG
+UserIntentInboxEntity intent = intentInboxService.persistIntent(userId, channel, rawText);
+orchestrator.process(intent); // NO! Handler execution delays ack
+return ResponseEntity.ok().build();
+```
+
+#### Invariant 5: Status Mutability Only
+
+After creation, **only status-related fields** may be updated.
+
+Mutable fields:
+- ✅ `status`
+- ✅ `status_reason`
+- ✅ `detected_intent` (after classification)
+- ✅ `intent_confidence` (after classification)
+- ✅ `missing_fields`
+- ✅ `processing_attempts`
+- ✅ `last_processed_at`
+
+Immutable fields:
+- ❌ `raw_text` (NEVER changes)
+- ❌ `user_id` (set at creation)
+- ❌ `channel` (set at creation)
+- ❌ `correlation_id` (set at creation)
+- ❌ `received_at` (set at creation)
+
+#### Invariant 6: Deduplication via Correlation ID
+
+Each intent must have a unique `correlation_id`.
+
+- Format: `{channel}:{userId}:{timestamp}:{uuid}`
+- Prevents duplicate processing on retries
+- Enables idempotent webhook handling
+
+Example:
+- Given: Webhook receives message twice due to retry
+- When: Second message arrives with same correlation_id
+- Then: System detects duplicate and returns existing intent
+- And: No duplicate processing occurs
+
+### Integration Test Requirements
+
+All intent inbox implementations must pass these tests:
+
+1. **Persistence Durability Test**
+   - Intent persisted to database immediately
+   - Intent retrievable after persistence
+   - All fields correctly saved
+
+2. **Immediate Acknowledgment Test**
+   - Persistence completes in < 500ms
+   - Status is PENDING after persistence
+   - No processing has occurred
+
+3. **Raw Text Immutability Test**
+   - Raw text never changes after creation
+   - Updates to other fields don't affect raw_text
+
+4. **No Financial Data Test**
+   - Inbox table has no financial columns
+   - Entity has no amount/balance fields
+
+5. **Status Mutability Test**
+   - Status can transition: PENDING → PROCESSING → COMPLETED
+   - Status can transition: PENDING → PROCESSING → FAILED
+   - Raw text remains unchanged during transitions
+
+6. **Deduplication Test**
+   - Duplicate correlation_id detected
+   - Existing intent returned on duplicate
+   - No duplicate database rows created
+
+### Usage in Code
+
+When implementing intent ingestion:
+
+```java
+// 1. Persist immediately
+UserIntentInboxEntity intent = intentInboxService.persistIntent(userId, channel, rawText);
+
+// 2. Return immediate acknowledgment
+return ResponseEntity.ok().build();
+
+// 3. Process asynchronously (in @Async method)
+@Async
+void processLater(Long intentId) {
+    UserIntentInboxEntity intent = repository.findById(intentId).orElseThrow();
+    
+    // Mark as processing
+    intent.setStatus(IntentStatus.PROCESSING);
+    repository.save(intent);
+    
+    try {
+        // Process intent
+        orchestrator.process(intent.getRawText(), context);
+        
+        // Mark as completed
+        intent.setStatus(IntentStatus.COMPLETED);
+    } catch (Exception e) {
+        intent.markAsFailed(e.getMessage());
+    }
+    
+    repository.save(intent);
+}
+```
+
+---
+
 ## Summary
 
 **Financial rules are the contract.**
