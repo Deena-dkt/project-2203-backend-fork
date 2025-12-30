@@ -975,6 +975,323 @@ Failed intents can be:
 
 ---
 
+## 8. Phase 3: Async Follow-Up Handling Contract
+
+**This section defines the contract for Phase 3 follow-up handling.**
+
+### Follow-Up Purpose
+
+When processing detects missing information, the system transitions the intent to NEEDS_INPUT state and awaits user response.
+
+- Follow-ups are asynchronous (no blocking)
+- Correlation is deterministic (most recent NEEDS_INPUT)
+- Only one unresolved follow-up per user at a time
+- New messages are accepted even with pending follow-ups
+
+### Follow-Up Schema
+
+Added column to `user_intent_inbox`:
+- `followup_parent_id` - References parent intent (nullable, self-referencing FK with CASCADE)
+
+Indexes:
+- `idx_intent_followup_parent` - Find follow-ups by parent ID
+- `idx_intent_needs_input_by_user` - Find NEEDS_INPUT intents by user
+
+### Follow-Up Flow
+
+```
+User sends incomplete message
+↓
+Processing detects missing data
+↓
+Intent marked NEEDS_INPUT with status_reason
+↓
+User sends follow-up message
+↓
+System correlates to pending NEEDS_INPUT intent
+↓
+Follow-up linked via followup_parent_id
+↓
+Parent intent resumed (NEEDS_INPUT → RECEIVED → PROCESSING)
+↓
+Follow-up marked PROCESSED (incorporated into parent)
+↓
+Parent processing continues with combined context
+↓
+Parent marked PROCESSED or NEEDS_INPUT (if still incomplete)
+```
+
+### Follow-Up Invariants
+
+These rules must hold for all follow-up handling:
+
+#### Invariant 1: Deterministic Correlation
+
+Follow-up messages correlate to the most recent NEEDS_INPUT intent for that user.
+
+- Uses `findFirstByUserIdAndStatusOrderByReceivedAtDesc(userId, NEEDS_INPUT)`
+- Deterministic - same inputs produce same correlation
+- No ambiguity - one pending follow-up per user
+
+Example:
+```java
+// User sends incomplete message
+UserIntentInboxEntity intent = persistIntent("user1", "WHATSAPP", "spent 500");
+// Processing marks as NEEDS_INPUT
+intent.markAsNeedsInput("Missing category");
+
+// User sends follow-up
+UserIntentInboxEntity followUp = persistIntent("user1", "WHATSAPP", "groceries");
+// System correlates to pending intent
+Optional<UserIntentInboxEntity> pending = findPendingFollowUp("user1");
+// Returns the "spent 500" intent
+```
+
+#### Invariant 2: Only One Unresolved Follow-Up Per User
+
+At most one NEEDS_INPUT intent exists per user at any time.
+
+- Validated by `countByUserIdAndStatus(userId, NEEDS_INPUT) <= 1`
+- System invariant - should never be violated
+- If violated, indicates bug in state management
+
+Example:
+```java
+// Valid state
+User A: NEEDS_INPUT intent (waiting for category)
+User A: RECEIVED intents (queued for processing)
+User A: PROCESSED intents (completed)
+
+// Invalid state (invariant violation)
+User A: NEEDS_INPUT intent 1
+User A: NEEDS_INPUT intent 2  // ❌ Should never happen
+```
+
+#### Invariant 3: Async Follow-Up Processing
+
+Follow-up correlation and resumption are asynchronous.
+
+- No blocking in webhook request thread
+- Follow-up linking happens in async @Async method
+- Parent resumption triggers new async processing
+- Webhook returns immediately after persistence
+
+Example:
+```java
+@Async("whatsappExecutor")
+public void processIncomingMessage(String from, String text) {
+    // Persist (fast)
+    UserIntentInboxEntity intent = persistIntent(from, "WHATSAPP", text);
+    
+    // Correlate (fast, deterministic)
+    boolean isFollowUp = followUpCorrelationService.processAsFollowUpIfApplicable(
+        from, "WHATSAPP", text, intent.getId());
+    
+    // Returns immediately - processing happens in background
+}
+```
+
+#### Invariant 4: Follow-Up Incorporation
+
+Follow-up intents are marked PROCESSED after incorporation into parent.
+
+- Follow-up raw_text preserved (immutability invariant)
+- Follow-up status transitions: RECEIVED → PROCESSED
+- Parent status transitions: NEEDS_INPUT → RECEIVED → PROCESSING
+- Combined context passed to orchestrator
+
+Example:
+```java
+// Before
+Parent: NEEDS_INPUT (id=1, raw_text="spent 500")
+FollowUp: RECEIVED (id=2, raw_text="groceries", followup_parent_id=null)
+
+// After correlation
+Parent: RECEIVED (id=1, raw_text="spent 500", status_reason="Resume with: groceries")
+FollowUp: PROCESSED (id=2, raw_text="groceries", followup_parent_id=1)
+```
+
+#### Invariant 5: New Messages Accepted During Follow-Up
+
+User can send new intents even with pending follow-up.
+
+- Current behavior: Any message while NEEDS_INPUT exists is treated as follow-up
+- Future enhancement: Intent classification could detect unrelated intents
+- System remains responsive - no blocking on follow-up completion
+
+Example:
+```java
+// Current Phase 3 behavior
+User: "spent 500" → NEEDS_INPUT (missing category)
+User: "check my balance" → Treated as follow-up to "spent 500"
+
+// Future enhancement
+User: "spent 500" → NEEDS_INPUT (missing category)
+User: "check my balance" → Detected as new QUERY intent (different from EXPENSE)
+```
+
+#### Invariant 6: Follow-Up Resumability
+
+Parent intent can be resumed multiple times if still incomplete.
+
+- First follow-up may not provide all missing data
+- Parent transitions: NEEDS_INPUT → PROCESSING → NEEDS_INPUT (if still incomplete)
+- Second follow-up correlates to same parent
+- Process repeats until complete or fails
+
+Example:
+```java
+// Multi-turn conversation
+Turn 1:
+User: "spent 500"
+System: NEEDS_INPUT (missing category)
+
+Turn 2:
+User: "groceries"
+System: NEEDS_INPUT (missing payment method)
+
+Turn 3:
+User: "credit card"
+System: PROCESSED (all data collected)
+```
+
+### Integration Test Requirements
+
+All follow-up implementations must pass these tests:
+
+1. **Basic Follow-Up Correlation Test**
+   - NEEDS_INPUT intent exists
+   - User sends follow-up
+   - Correlated to correct parent
+   - Follow-up linked via followup_parent_id
+
+2. **Find Pending Follow-Up Test**
+   - findPendingFollowUp returns most recent NEEDS_INPUT
+   - Returns empty when no NEEDS_INPUT exists
+
+3. **Unresolved Follow-Up Detection Test**
+   - hasUnresolvedFollowUp returns true when NEEDS_INPUT exists
+   - Returns false when no NEEDS_INPUT
+
+4. **Single Pending Follow-Up Invariant Test**
+   - At most one NEEDS_INPUT per user
+   - Validation detects violations
+
+5. **Out-of-Order Messages Test**
+   - New intent while follow-up pending
+   - System handles deterministically
+
+6. **Follow-Up Linking Test**
+   - followup_parent_id correctly set
+   - isFollowup() returns true
+   - Find follow-ups by parent works
+
+7. **Multiple Follow-Ups Test**
+   - Parent can have multiple sequential follow-ups
+   - Each follow-up processed correctly
+
+8. **Duplicate Follow-Up Replies Test**
+   - Duplicate messages handled gracefully
+   - No duplicate processing
+
+9. **Different Users Test**
+   - Each user's follow-ups independent
+   - No cross-contamination
+
+### Usage in Code
+
+When implementing follow-up handling:
+
+```java
+// Phase 3: WhatsAppMessageProcessor with follow-up support
+@Async("whatsappExecutor")
+public void processIncomingMessage(String from, String text) {
+    // Phase 1: Persist
+    UserIntentInboxEntity intent = intentInboxService.persistIntent(from, "WHATSAPP", text);
+    
+    // Phase 3: Check for follow-up
+    boolean isFollowUp = followUpCorrelationService.processAsFollowUpIfApplicable(
+            from, "WHATSAPP", text, intent.getId());
+    
+    if (isFollowUp) {
+        // Follow-up correlation service handles resumption
+        return;
+    }
+    
+    // Phase 2: Process new intent
+    processingEngine.processIntent(intent.getId());
+}
+
+// FollowUpCorrelationService
+@Transactional
+public boolean processAsFollowUpIfApplicable(String userId, String channel, String rawText, Long newIntentId) {
+    // Find pending follow-up
+    Optional<UserIntentInboxEntity> pendingIntent = findPendingFollowUp(userId);
+    
+    if (pendingIntent.isEmpty()) {
+        return false; // No pending follow-up, treat as new intent
+    }
+    
+    // Link follow-up to parent
+    UserIntentInboxEntity parent = pendingIntent.get();
+    UserIntentInboxEntity followUp = intentRepository.findById(newIntentId).orElseThrow();
+    followUp.setFollowupParentId(parent.getId());
+    intentRepository.save(followUp);
+    
+    // Resume parent processing
+    resumeParentIntentProcessing(parent, followUp);
+    
+    return true;
+}
+
+@Transactional
+public void resumeParentIntentProcessing(UserIntentInboxEntity parent, UserIntentInboxEntity followUp) {
+    // Transition parent back to RECEIVED
+    parent.setStatus(IntentStatus.RECEIVED);
+    parent.setStatusReason("Resume with follow-up: " + followUp.getRawText());
+    intentRepository.save(parent);
+    
+    // Mark follow-up as PROCESSED (incorporated)
+    followUp.markAsProcessed();
+    followUp.setStatusReason("Incorporated into parent intent " + parent.getId());
+    intentRepository.save(followUp);
+    
+    // Trigger async reprocessing
+    processingEngine.processIntent(parent.getId());
+}
+```
+
+### Follow-Up Behavior Guarantees
+
+**Determinism**: Same user state + same message → same correlation
+
+**Async**: No blocking - all operations async
+
+**Resumability**: Parent can be resumed multiple times
+
+**Isolation**: Per-user follow-up state isolated
+
+**Acceptance**: New messages always accepted (never blocked)
+
+### Future Enhancements
+
+**Intent Classification for Follow-Ups**:
+- Detect when message is unrelated to pending follow-up
+- Allow user to send new intent while follow-up pending
+- Requires LLM context understanding
+
+**Multi-Intent Follow-Ups**:
+- Support follow-ups for multiple pending intents
+- User selects which intent to continue
+- Requires conversation context management
+
+**Follow-Up Timeout**:
+- Auto-expire NEEDS_INPUT after timeout (e.g., 1 hour)
+- Mark as FAILED with reason "Timeout waiting for user input"
+- Scheduled job to clean up stale follow-ups
+
+---
+
 ## Summary
 
 **Financial rules are the contract.**

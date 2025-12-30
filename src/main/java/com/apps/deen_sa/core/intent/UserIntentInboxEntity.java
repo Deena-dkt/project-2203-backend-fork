@@ -113,6 +113,20 @@ public class UserIntentInboxEntity {
     private LocalDateTime lastProcessedAt;
 
     /**
+     * Phase 3: Follow-up support
+     * If this is a follow-up message, references the parent intent that needs input
+     */
+    @Column(name = "followup_parent_id")
+    private Long followupParentId;
+
+    /**
+     * Check if this intent is a follow-up to another intent
+     */
+    public boolean isFollowup() {
+        return followupParentId != null;
+    }
+
+    /**
      * Increment processing attempts and update last processed timestamp
      */
     public void recordProcessingAttempt() {

@@ -1,5 +1,6 @@
 package com.apps.deen_sa.conversation;
 
+import com.apps.deen_sa.core.intent.FollowUpCorrelationService;
 import com.apps.deen_sa.core.intent.IntentInboxService;
 import com.apps.deen_sa.core.intent.IntentProcessingEngine;
 import com.apps.deen_sa.core.intent.UserIntentInboxEntity;
@@ -15,17 +16,20 @@ public class WhatsAppMessageProcessor {
 
     private final IntentInboxService intentInboxService;
     private final IntentProcessingEngine processingEngine;
+    private final FollowUpCorrelationService followUpCorrelationService;
     private final WhatsAppReplySender replySender;
 
     /**
-     * Phase 2: Async Processing with Intent Staging
+     * Phase 3: Async Processing with Follow-Up Support
      * 
      * This method:
      * 1. Persists intent immediately (Phase 1)
-     * 2. Triggers async processing (Phase 2)
-     * 3. Returns immediately for webhook acknowledgment
+     * 2. Checks for pending follow-up (Phase 3)
+     * 3. Routes to follow-up handler OR triggers new processing (Phase 2)
+     * 4. Returns immediately for webhook acknowledgment
      * 
      * Processing is fully decoupled from ingestion.
+     * Follow-up correlation is deterministic and async.
      */
     @Async("whatsappExecutor")
     public void processIncomingMessage(String from, String text) {
@@ -36,7 +40,17 @@ public class WhatsAppMessageProcessor {
             UserIntentInboxEntity intent = intentInboxService.persistIntent(from, "WHATSAPP", text);
             log.info("Intent persisted to inbox: id={}, correlation_id={}", intent.getId(), intent.getCorrelationId());
             
-            // Phase 2: Trigger async processing
+            // Phase 3: Check if this is a follow-up to a pending intent
+            boolean isFollowUp = followUpCorrelationService.processAsFollowUpIfApplicable(
+                    from, "WHATSAPP", text, intent.getId());
+            
+            if (isFollowUp) {
+                log.info("Message from {} processed as follow-up to pending intent", from);
+                // Follow-up correlation service handles the rest
+                return;
+            }
+            
+            // Phase 2: Trigger async processing for new intent
             // Processing happens separately - no inline handler execution
             processingEngine.processIntent(intent.getId());
 
