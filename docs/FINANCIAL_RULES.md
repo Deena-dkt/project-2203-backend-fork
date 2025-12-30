@@ -121,7 +121,7 @@ When writing integration tests:
 Example:
 ```java
 /**
- * Tests enforcement of FINANCIAL_RULES.md - Section 1, Invariant 1:
+ * Tests enforcement of FINANCIAL_RULES.md - Section 1, Invariant 1
  * "A transaction marked financiallyApplied = true must never 
  *  produce additional value adjustments"
  */
@@ -407,7 +407,7 @@ From `MonthlySimulationIT.java`:
 
 ```java
 /**
- * Enforces: FINANCIAL_RULES.md - Section 1, Invariant 1:
+ * Enforces: FINANCIAL_RULES.md - Section 1, Invariant 1
  * "No Duplicate Financial Application - Rerunning simulation should not change balances"
  */
 @Test
