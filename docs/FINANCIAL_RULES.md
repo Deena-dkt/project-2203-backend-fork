@@ -1603,6 +1603,321 @@ public class IntentProcessingEngine {
 
 ---
 
+## 10. Phase 5: Edge Case Hardening
+
+**This section documents edge case handling and system resilience.**
+
+### Edge Case Testing Purpose
+
+Verify system behavior under abnormal conditions:
+- Duplicate messages
+- Delayed replies
+- Partial failures
+- Race conditions
+- Boundary conditions
+- High load scenarios
+
+All edge cases documented in Section 4 are covered by integration tests.
+
+### Edge Cases Tested
+
+#### 1. Duplicate Message Handling
+
+**Scenario**: Same message submitted multiple times
+
+**Behavior**:
+- Each submission gets unique correlation ID (includes timestamp)
+- Creates separate intents (by design - timestamps differ)
+- System handles concurrent duplicates without errors
+- Processing is idempotent (retries don't duplicate financial impact)
+
+**Tests**:
+- `testDuplicateMessage_SameCorrelationId` - Sequential duplicates
+- `testDuplicateMessage_ConcurrentSubmission` - Concurrent duplicates
+- `testDuplicateProcessing_IdempotentRetry` - Processing idempotency
+
+**Example**:
+```java
+// User submits same message twice
+UserIntentInboxEntity first = persistIntent("user1", "WHATSAPP", "spent 500");
+UserIntentInboxEntity second = persistIntent("user1", "WHATSAPP", "spent 500");
+
+// Different intents (different timestamps in correlation ID)
+assertNotEquals(first.getId(), second.getId());
+
+// But both processed correctly without duplication
+```
+
+#### 2. Delayed Reply Handling
+
+**Scenario**: User responds to NEEDS_INPUT intent after long delay
+
+**Behavior**:
+- System correlates to most recent NEEDS_INPUT intent
+- No timeout enforcement (currently)
+- Works even with hours/days delay
+- Future enhancement: Add timeout to ignore very old pending intents
+
+**Tests**:
+- `testDelayedReply_OldPendingIntent` - 2 hour delay
+- `testDelayedReply_NewIntentAfterTimeout` - 2 day delay
+
+**Example**:
+```java
+// User has NEEDS_INPUT intent from 2 hours ago
+UserIntentInboxEntity oldIntent = createNeedsInput("user1", "spent 500");
+oldIntent.setReceivedAt(LocalDateTime.now().minusHours(2));
+
+// User finally responds
+UserIntentInboxEntity reply = persistIntent("user1", "WHATSAPP", "groceries");
+
+// Still correlates correctly
+assertTrue(isFollowUp(reply));
+assertEquals(oldIntent.getId(), reply.getFollowupParentId());
+```
+
+#### 3. Partial Failure Handling
+
+**Scenario**: Processing fails midway through
+
+**Behavior**:
+- Intent marked FAILED with reason
+- Processing attempts incremented
+- Can be retried via `retryIntent()`
+- Retry does not duplicate financial impact
+
+**Tests**:
+- `testPartialFailure_ProcessingFailsMidway` - Mid-processing failure
+- `testPartialFailure_DatabaseConstraintViolation` - Database errors
+
+**Example**:
+```java
+// Intent fails during processing
+processIntent(intentId);
+
+// Marked as FAILED
+assertEquals(IntentStatus.FAILED, intent.getStatus());
+assertNotNull(intent.getStatusReason());
+
+// Can retry safely
+retryIntent(intentId);
+
+// No duplicate financial impact (idempotency check)
+```
+
+#### 4. Race Condition Handling
+
+**Scenario**: Concurrent operations on same intent
+
+**Behavior**:
+- Concurrent follow-up responses handled gracefully
+- Processing and follow-up checks don't conflict
+- Database-level constraints prevent corruption
+- System remains consistent
+
+**Tests**:
+- `testRaceCondition_ConcurrentFollowUpResponses` - Concurrent follow-ups
+- `testRaceCondition_ProcessWhileIngestingFollowUp` - Process during follow-up check
+
+**Example**:
+```java
+// User sends two follow-up responses concurrently
+CompletableFuture.runAsync(() -> submitFollowUp("groceries"));
+CompletableFuture.runAsync(() -> submitFollowUp("groceries"));
+
+// Both complete without errors
+// Parent resumed correctly
+```
+
+#### 5. Ordering Issue Handling
+
+**Scenario**: Messages arrive out of order or in quick succession
+
+**Behavior**:
+- All messages persisted with correct receive timestamps
+- Processing order determined by async queue
+- Follow-up only works when parent in NEEDS_INPUT state
+- Multiple rapid messages all processed
+
+**Tests**:
+- `testOrdering_MultipleIntentsFromSameUser` - Quick succession
+- `testOrdering_FollowUpBeforeParentProcessed` - Out-of-order timing
+
+**Example**:
+```java
+// User sends 3 messages quickly
+ingestIntent("user1", "WHATSAPP", "message 1");
+ingestIntent("user1", "WHATSAPP", "message 2");
+ingestIntent("user1", "WHATSAPP", "message 3");
+
+// All persisted with correct ordering
+List<Intent> intents = findByUser("user1");
+assertTrue(intents.get(0).getReceivedAt().isBefore(intents.get(1).getReceivedAt()));
+```
+
+#### 6. Boundary Condition Handling
+
+**Scenario**: Edge cases for input validation
+
+**Behavior**:
+- Empty messages accepted (raw text preserved as empty string)
+- Very long user IDs handled (database constraints may apply)
+- Special characters preserved (emojis, @mentions, #tags)
+- System degrades gracefully for constraint violations
+
+**Tests**:
+- `testBoundary_EmptyMessage` - Empty text
+- `testBoundary_VeryLongUserId` - 200+ character user ID
+- `testBoundary_SpecialCharactersInText` - Unicode, emojis
+
+**Example**:
+```java
+// Empty message
+UserIntentInboxEntity empty = persistIntent("user1", "WHATSAPP", "");
+assertEquals("", empty.getRawText()); // Preserved
+
+// Special characters
+UserIntentInboxEntity special = persistIntent("user1", "WHATSAPP", "🍔 #dinner @john");
+assertEquals("🍔 #dinner @john", special.getRawText()); // Preserved
+```
+
+#### 7. High Load Handling
+
+**Scenario**: Many intents submitted in short time
+
+**Behavior**:
+- All intents persisted successfully
+- Async processing queue handles load
+- No dropped messages
+- System remains responsive
+
+**Tests**:
+- `testStress_ManyIntentsQuickly` - 20 intents rapidly
+
+**Example**:
+```java
+// Submit 20 intents quickly
+for (int i = 0; i < 20; i++) {
+    ingestIntent("user1", "WHATSAPP", "message " + i);
+}
+
+// All persisted
+assertEquals(20, countUserIntents("user1"));
+```
+
+### Edge Case Invariants
+
+These rules must hold for all edge cases:
+
+#### Invariant 1: No Data Loss
+
+Under any edge case, raw user input is never lost.
+
+- Duplicate submissions create separate intents (different timestamps)
+- Failed processing preserves raw text
+- Database errors don't lose user data
+- Retries don't mutate original raw text
+
+#### Invariant 2: Idempotent Retries
+
+Processing retries never cause duplicate financial impact.
+
+- Already-processed intents skip handler execution
+- Financial impact check prevents double-application
+- Retry increments attempts but doesn't duplicate work
+- Safe to retry any FAILED or NEEDS_INPUT intent
+
+#### Invariant 3: Graceful Degradation
+
+System handles errors without crashing.
+
+- Invalid inputs logged and handled
+- Database constraints cause controlled failures
+- Partial failures captured in status_reason
+- Race conditions don't corrupt state
+
+#### Invariant 4: Deterministic Behavior
+
+Same inputs produce same outputs (given same system state).
+
+- Classification deterministic (given same LLM state)
+- Follow-up correlation deterministic (most recent NEEDS_INPUT)
+- State transitions follow rules consistently
+- No random behavior in core processing
+
+### Integration Test Requirements
+
+All edge case implementations must pass these tests:
+
+1. **Duplicate Message Tests** (3 tests)
+   - Sequential duplicates handled
+   - Concurrent duplicates handled
+   - Idempotent retry processing
+
+2. **Delayed Reply Tests** (2 tests)
+   - Old pending intents still work
+   - Very old pending intents behavior documented
+
+3. **Partial Failure Tests** (2 tests)
+   - Mid-processing failures recoverable
+   - Database constraint violations handled
+
+4. **Race Condition Tests** (2 tests)
+   - Concurrent follow-ups safe
+   - Processing during follow-up check safe
+
+5. **Ordering Issue Tests** (2 tests)
+   - Multiple quick messages ordered correctly
+   - Follow-up timing edge cases handled
+
+6. **Boundary Condition Tests** (3 tests)
+   - Empty messages handled
+   - Very long user IDs handled
+   - Special characters preserved
+
+7. **High Load Tests** (1 test)
+   - Many rapid intents handled
+
+### Fuzz Testing
+
+Fuzz testing runs random scenarios to discover unexpected edge cases.
+
+**Current Coverage**:
+- Financial simulation fuzz testing (existing)
+- 50 iterations per test run
+- 100 iterations in CI/CD
+- All failures reproducible via seed
+
+**Intent Processing Fuzz** (Future Enhancement):
+- Random intent sequences
+- Random timing and ordering
+- Random follow-up patterns
+- Stress test async processing
+
+**To run fuzz tests**:
+```bash
+mvn verify -Pintegration -Dfuzz.iterations=50
+```
+
+**To reproduce failure**:
+```bash
+mvn verify -Pintegration -Dtest=FuzzSimulationIT#testReproduceSeed -Dfuzz.seed=1042
+```
+
+### Edge Cases Discovered During Testing
+
+This section documents any NEW edge cases discovered during Phase 5.
+
+**None discovered yet** - All tested scenarios behaved as expected per documented invariants.
+
+If new edge cases are discovered:
+1. Document behavior here first
+2. Add test to verify behavior
+3. Update code if needed to handle edge case
+4. Never weaken existing invariants
+
+---
+
 ## Summary
 
 **Financial rules are the contract.**
