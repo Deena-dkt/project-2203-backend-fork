@@ -1292,6 +1292,317 @@ public void resumeParentIntentProcessing(UserIntentInboxEntity parent, UserInten
 
 ---
 
+## 9. Phase 4: Channel Independence Rule
+
+**This section defines the contract for channel-independent processing.**
+
+### Channel Independence Purpose
+
+The core intent processing engine is completely independent of the channel (WhatsApp, UI, Mobile, API).
+
+- Same intent behaves identically across all channels
+- Core processing has zero channel dependencies
+- Channel-specific concerns (replies, notifications) handled separately
+- Enables consistent user experience across all channels
+
+### Channel Types
+
+**Message-Based Channels** (e.g., WhatsApp):
+- User sends messages via external platform
+- Messages arrive via webhook
+- Processing happens asynchronously
+- Responses sent via channel-specific API
+
+**State-Based Channels** (e.g., UI, Mobile):
+- User interacts via application UI
+- Client polls for pending actions
+- User provides responses via API calls
+- UI displays current state
+
+### Channel-Agnostic Architecture
+
+```
+┌─────────────┐       ┌──────────────────┐       ┌─────────────────┐
+│  WhatsApp   │──────▶│ Channel-Agnostic │──────▶│ Intent          │
+│  Webhook    │       │ Intent Service   │       │ Processing      │
+└─────────────┘       │                  │       │ Engine          │
+                      │                  │       └─────────────────┘
+┌─────────────┐       │                  │              │
+│  UI/Mobile  │──────▶│  ingestIntent()  │              │
+│  API        │       │  getPending()    │              │
+└─────────────┘       │  resumeWith()    │              │
+                      └──────────────────┘              │
+                                                        ▼
+                                              ┌─────────────────┐
+                                              │ Handler         │
+                                              │ Execution       │
+                                              │ (Channel-Free)  │
+                                              └─────────────────┘
+```
+
+### Channel Independence Invariants
+
+#### Invariant 1: Core Processing is Channel-Agnostic
+
+All core processing logic has zero dependency on channel.
+
+- Intent classification independent of channel
+- Handler execution independent of channel
+- State transitions independent of channel
+- Financial operations independent of channel
+
+Example:
+```java
+// ❌ WRONG - Channel-dependent logic
+public void processIntent(UserIntentInboxEntity intent) {
+    if (intent.getChannel().equals("WHATSAPP")) {
+        // WhatsApp-specific processing
+    } else if (intent.getChannel().equals("WEB")) {
+        // Web-specific processing
+    }
+}
+
+// ✅ CORRECT - Channel-agnostic logic
+public void processIntent(UserIntentInboxEntity intent) {
+    // Same logic regardless of channel
+    IntentResult classification = classifier.classify(intent.getRawText());
+    SpeechResult result = orchestrator.process(intent.getRawText(), context);
+    // Channel-independent processing
+}
+```
+
+#### Invariant 2: Same Intent Behaves Identically
+
+Given the same intent text, processing produces the same result regardless of channel.
+
+- Classification is deterministic (given same LLM state)
+- Handlers produce same financial impact
+- State transitions follow same rules
+- Validation is consistent
+
+Example:
+```java
+// Intent via WhatsApp
+UserIntentInboxEntity whatsappIntent = ingestIntent("user1", "WHATSAPP", "spent 500 on groceries");
+// Intent via Web
+UserIntentInboxEntity webIntent = ingestIntent("user1", "WEB", "spent 500 on groceries");
+
+// Both should:
+// - Be classified as EXPENSE
+// - Create same transaction amount
+// - Follow same validation rules
+// - Have same completion criteria
+```
+
+#### Invariant 3: Channel Stored for Context Only
+
+The `channel` field is stored for:
+- Auditing (know where intent came from)
+- Analytics (channel usage patterns)
+- Correlation ID generation (uniqueness per channel)
+
+But NOT for:
+- Processing logic decisions
+- Handler selection
+- Validation rules
+- Business logic
+
+#### Invariant 4: Separate Channel-Specific Concerns
+
+Channel-specific logic is isolated to channel adapters:
+
+**Separated Concerns**:
+- ✅ Reply sending (WhatsAppReplySender for WhatsApp)
+- ✅ Notification delivery (push notifications for Mobile)
+- ✅ UI updates (polling/SSE for Web)
+- ✅ Authentication (channel-specific auth)
+
+**Channel-Agnostic Concerns**:
+- ✅ Intent ingestion (ChannelAgnosticIntentService)
+- ✅ Intent processing (IntentProcessingEngine)
+- ✅ Follow-up correlation (FollowUpCorrelationService)
+- ✅ Handler execution (SpeechOrchestrator)
+
+### API Endpoints for UI/Mobile
+
+**POST /api/v1/intents** - Submit new intent
+```json
+Request:
+{
+  "userId": "user123",
+  "channel": "WEB",
+  "text": "spent 500 on groceries"
+}
+
+Response:
+{
+  "intentId": 42,
+  "correlationId": "WEB:user123:1234567890:abc123",
+  "status": "RECEIVED",
+  "message": "Intent submitted successfully"
+}
+```
+
+**GET /api/v1/intents/pending?userId=user123** - Get pending action
+```json
+Response (has pending):
+{
+  "hasPendingAction": true,
+  "intentId": 42,
+  "originalText": "spent 500",
+  "statusReason": "Missing category",
+  "detectedIntent": "EXPENSE"
+}
+
+Response (no pending):
+{
+  "hasPendingAction": false
+}
+```
+
+**POST /api/v1/intents/resume** - Resume with response
+```json
+Request:
+{
+  "userId": "user123",
+  "channel": "WEB",
+  "responseText": "groceries"
+}
+
+Response:
+{
+  "intentId": 43,
+  "correlationId": "WEB:user123:1234567891:def456",
+  "status": "PROCESSED",
+  "message": "Resume request processed successfully"
+}
+```
+
+### Integration Test Requirements
+
+All channel independence implementations must pass these tests:
+
+1. **Submit Intent via API Test**
+   - UI client can submit intents
+   - Intent created with correct channel
+   - Status is RECEIVED
+
+2. **Get Pending Action Test**
+   - Returns null when no pending action
+   - Returns pending NEEDS_INPUT intent when exists
+   - Contains original text and status reason
+
+3. **Resume Intent Test**
+   - User can resume with response
+   - Follow-up linked to parent intent
+   - Parent processing resumed
+
+4. **Channel Independence Test**
+   - Same intent text from different channels
+   - Both processed identically
+   - Same classification and validation
+
+5. **Default Channel Test**
+   - Missing channel defaults to WEB
+   - System remains functional
+
+6. **Multiple Channels for Same User Test**
+   - User can use multiple channels
+   - Each intent tracked separately
+   - No cross-contamination
+
+### Usage in Code
+
+When implementing channel adapters:
+
+```java
+// WhatsApp Adapter
+@Service
+public class WhatsAppMessageProcessor {
+    private final ChannelAgnosticIntentService intentService;
+    private final WhatsAppReplySender replySender; // Channel-specific
+    
+    @Async
+    public void processIncomingMessage(String from, String text) {
+        // Use channel-agnostic service
+        intentService.ingestIntent(from, "WHATSAPP", text);
+        
+        // WhatsApp-specific reply handling happens separately
+        // (via notification service when processing completes)
+    }
+}
+
+// UI/Mobile Adapter
+@RestController
+public class IntentApiController {
+    private final ChannelAgnosticIntentService intentService;
+    
+    @PostMapping("/api/v1/intents")
+    public ResponseEntity<IntentResponse> submitIntent(@RequestBody IntentRequest request) {
+        // Use same channel-agnostic service
+        UserIntentInboxEntity intent = intentService.ingestIntent(
+                request.getUserId(), 
+                request.getChannel(), 
+                request.getText()
+        );
+        
+        // Return state for UI to display
+        return ResponseEntity.ok(toResponse(intent));
+    }
+    
+    @GetMapping("/api/v1/intents/pending")
+    public ResponseEntity<PendingActionResponse> getPendingAction(@RequestParam String userId) {
+        // UI can poll for pending actions
+        UserIntentInboxEntity pending = intentService.getPendingAction(userId);
+        return ResponseEntity.ok(toResponse(pending));
+    }
+}
+
+// Core Processing (Channel-Agnostic)
+@Service
+public class IntentProcessingEngine {
+    // NO channel dependencies
+    // Same logic for all channels
+    
+    public void processIntent(Long intentId) {
+        UserIntentInboxEntity intent = repository.findById(intentId).orElseThrow();
+        
+        // Channel-agnostic processing
+        IntentResult classification = classifier.classify(intent.getRawText());
+        SpeechResult result = orchestrator.process(intent.getRawText(), context);
+        
+        // No channel-specific logic here
+    }
+}
+```
+
+### Channel Comparison
+
+| Feature | WhatsApp (Message-Based) | UI/Mobile (State-Based) |
+|---------|-------------------------|-------------------------|
+| Entry Point | Webhook | REST API |
+| Interaction | Push messages | Poll + Request/Response |
+| Follow-ups | Automatic via message flow | Explicit via API calls |
+| State Query | N/A (messages only) | GET /pending endpoint |
+| User Experience | Conversational | Form-based |
+| Core Processing | ✅ Same | ✅ Same |
+| Handlers | ✅ Same | ✅ Same |
+| Validation | ✅ Same | ✅ Same |
+
+### Benefits of Channel Independence
+
+**Consistency**: Same intent processed identically across all channels
+
+**Maintainability**: Single processing engine, not per-channel implementations
+
+**Testability**: Test once, works everywhere
+
+**Scalability**: Add new channels without changing core
+
+**Flexibility**: Users can switch channels seamlessly
+
+---
+
 ## Summary
 
 **Financial rules are the contract.**
