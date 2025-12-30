@@ -84,7 +84,7 @@ public class UserIntentInboxEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     @Builder.Default
-    private IntentStatus status = IntentStatus.PENDING;
+    private IntentStatus status = IntentStatus.RECEIVED;
 
     /**
      * Reason for current status (e.g., error message if FAILED)
@@ -131,8 +131,16 @@ public class UserIntentInboxEntity {
     /**
      * Mark as completed successfully
      */
-    public void markAsCompleted() {
-        this.status = IntentStatus.COMPLETED;
+    public void markAsProcessed() {
+        this.status = IntentStatus.PROCESSED;
+    }
+    
+    /**
+     * Mark as needing input
+     */
+    public void markAsNeedsInput(String reason) {
+        this.status = IntentStatus.NEEDS_INPUT;
+        this.statusReason = reason;
     }
 
     /**

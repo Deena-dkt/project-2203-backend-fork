@@ -58,14 +58,14 @@ class IntentInboxIT extends IntegrationTestBase {
         assertEquals(rawText, intent.getRawText());
         assertNotNull(intent.getCorrelationId(), "Correlation ID should be generated");
         assertNotNull(intent.getReceivedAt(), "Received timestamp should be set");
-        assertEquals(IntentStatus.PENDING, intent.getStatus());
+        assertEquals(IntentStatus.RECEIVED, intent.getStatus());
         assertEquals(0, intent.getProcessingAttempts());
 
         // Verify durability - retrieve from database
         UserIntentInboxEntity retrieved = repository.findById(intent.getId()).orElse(null);
         assertNotNull(retrieved, "Intent should be durable in database");
         assertEquals(rawText, retrieved.getRawText(), "Raw text should be persisted");
-        assertEquals(IntentStatus.PENDING, retrieved.getStatus());
+        assertEquals(IntentStatus.RECEIVED, retrieved.getStatus());
     }
 
     @Test
@@ -144,11 +144,11 @@ class IntentInboxIT extends IntegrationTestBase {
         assertEquals("Started processing", updated.getStatusReason());
 
         // When - Update to COMPLETED
-        intentInboxService.updateStatus(intentId, IntentStatus.COMPLETED, null);
+        intentInboxService.updateStatus(intentId, IntentStatus.PROCESSED, null);
 
         // Then
         updated = repository.findById(intentId).orElseThrow();
-        assertEquals(IntentStatus.COMPLETED, updated.getStatus());
+        assertEquals(IntentStatus.PROCESSED, updated.getStatus());
     }
 
     @Test
@@ -206,10 +206,10 @@ class IntentInboxIT extends IntegrationTestBase {
         UserIntentInboxEntity intent3 = intentInboxService.persistIntent("user3", "WHATSAPP", "msg3");
         
         // Mark one as completed
-        intentInboxService.updateStatus(intent3.getId(), IntentStatus.COMPLETED, null);
+        intentInboxService.updateStatus(intent3.getId(), IntentStatus.PROCESSED, null);
 
         // When - Find pending intents
-        List<UserIntentInboxEntity> pending = repository.findByStatusOrderByReceivedAt(IntentStatus.PENDING);
+        List<UserIntentInboxEntity> pending = repository.findByStatusOrderByReceivedAt(IntentStatus.RECEIVED);
 
         // Then
         assertEquals(2, pending.size(), "Should find 2 pending intents");
@@ -236,7 +236,7 @@ class IntentInboxIT extends IntegrationTestBase {
                 "Persistence should be fast for immediate acknowledgment (took " + duration + "ms)");
         
         // Verify it's in PENDING status (not processed yet)
-        assertEquals(IntentStatus.PENDING, intent.getStatus(), 
+        assertEquals(IntentStatus.RECEIVED, intent.getStatus(), 
                 "Intent should be PENDING - no inline processing");
     }
 

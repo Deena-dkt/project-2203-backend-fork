@@ -643,6 +643,338 @@ void processLater(Long intentId) {
 
 ---
 
+## 7. Phase 2: Async Processing Engine Contract
+
+**This section defines the contract for Phase 2 async intent processing.**
+
+### Processing Engine Purpose
+
+The `IntentProcessingEngine` processes intents from the inbox asynchronously.
+
+- Decouples ingestion from processing
+- Ensures idempotent processing (no double financial impact)
+- Manages state transitions
+- Handles failures and retries
+
+### Intent State Machine
+
+Phase 2 introduces a formal state machine for intent processing.
+
+```
+RECEIVED → PROCESSING → PROCESSED
+                    ↓→ NEEDS_INPUT
+                    ↓→ FAILED
+
+NEEDS_INPUT → PROCESSING (on retry)
+FAILED → PROCESSING (on retry)
+```
+
+**State Descriptions:**
+
+- **RECEIVED**: Intent persisted, awaiting processing (Phase 1)
+- **PROCESSING**: Intent currently being processed (Phase 2)
+- **PROCESSED**: Intent successfully processed and complete
+- **NEEDS_INPUT**: Intent requires additional user input (follow-up)
+- **FAILED**: Intent processing failed (can be retried)
+- **IGNORED**: Intent intentionally not processed (spam, invalid)
+
+### Processing Engine Invariants
+
+These rules must hold for all intent processing:
+
+#### Invariant 1: Idempotent Processing
+
+Financial handlers must execute **at most once** per intent.
+
+- Retries do not double-apply financial impact
+- System checks if financial impact already applied before processing
+- Uses correlation_id and transaction lookups for deduplication
+
+Example:
+```java
+// ✅ CORRECT - Idempotency check prevents double impact
+boolean alreadyApplied = checkIfFinanciallyApplied(intent);
+if (alreadyApplied) {
+    log.info("Intent already has financial impact, marking PROCESSED");
+    intent.markAsProcessed();
+    return;
+}
+
+// Process only if not already applied
+orchestrator.process(intent.getRawText(), context);
+```
+
+#### Invariant 2: State Transition Guards
+
+State transitions must follow the state machine.
+
+Valid transitions:
+- ✅ RECEIVED → PROCESSING
+- ✅ PROCESSING → PROCESSED
+- ✅ PROCESSING → NEEDS_INPUT
+- ✅ PROCESSING → FAILED
+- ✅ NEEDS_INPUT → PROCESSING (retry)
+- ✅ FAILED → PROCESSING (retry)
+
+Invalid transitions:
+- ❌ PROCESSED → PROCESSING (cannot retry completed intent)
+- ❌ RECEIVED → PROCESSED (must go through PROCESSING)
+- ❌ PROCESSING → RECEIVED (invalid backward transition)
+
+Example:
+```java
+// Retry validation
+if (intent.getStatus() != IntentStatus.FAILED && 
+    intent.getStatus() != IntentStatus.NEEDS_INPUT) {
+    throw new IllegalStateException(
+        "Cannot retry intent in status " + intent.getStatus());
+}
+```
+
+#### Invariant 3: Processing Attempt Tracking
+
+Every processing attempt must be tracked.
+
+- `processing_attempts` increments on each attempt
+- `last_processed_at` updates on each attempt
+- Enables monitoring and debugging
+
+Example:
+```java
+public void markAsProcessing() {
+    this.status = IntentStatus.PROCESSING;
+    this.processingAttempts++;
+    this.lastProcessedAt = LocalDateTime.now();
+}
+```
+
+#### Invariant 4: Classification Before Processing
+
+Intent classification happens before handler execution.
+
+- `detected_intent` and `intent_confidence` set during first processing
+- Classification failures do not block processing (defaults to UNKNOWN)
+- Classification is cached for retries
+
+Example:
+- Given: Intent with `raw_text = "spent 500 on groceries"`
+- When: First processing attempt
+- Then: `detected_intent = "EXPENSE"` and `intent_confidence = 0.95`
+- And: Classification persisted for future retries
+
+#### Invariant 5: Async Processing Isolation
+
+Processing happens asynchronously, isolated from ingestion.
+
+- Ingestion returns immediately (Phase 1)
+- Processing executes in separate thread pool
+- Failures in processing do not affect ingestion
+- Processing can retry without re-ingesting
+
+Example:
+```java
+// Ingestion (fast path)
+UserIntentInboxEntity intent = intentInboxService.persistIntent(userId, channel, text);
+return ResponseEntity.ok().build(); // < 500ms
+
+// Processing (slow path, async)
+@Async("intentProcessingExecutor")
+public void processIntent(Long intentId) {
+    // This runs in background, decoupled from webhook
+}
+```
+
+#### Invariant 6: Retry Safety
+
+Retries must be safe and not cause duplicate financial impact.
+
+- Only FAILED and NEEDS_INPUT intents can be retried
+- Retry transitions intent back to RECEIVED, then to PROCESSING
+- Financial impact deduplication prevents double-application
+- Retry increments `processing_attempts`
+
+Example:
+```java
+// Safe retry flow
+Intent (FAILED) → retryIntent() → RECEIVED → processIntent() → PROCESSING
+                                                              ↓
+                                         (check already applied) → PROCESSED
+```
+
+### Integration Test Requirements
+
+All intent processing implementations must pass these tests:
+
+1. **Async Processing Test**
+   - Intent transitions from RECEIVED to terminal state
+   - Processing happens asynchronously
+   - Terminal states: PROCESSED, NEEDS_INPUT, or FAILED
+
+2. **Idempotent Processing Test**
+   - Multiple calls to processIntent() for same intent
+   - Financial impact occurs only once
+   - No duplicate transactions created
+
+3. **Retry Safety Test**
+   - FAILED intent can be retried
+   - NEEDS_INPUT intent can be retried
+   - Retry increments processing_attempts
+   - Retry does not double-apply financial impact
+
+4. **State Transition Guards Test**
+   - PROCESSED intent cannot be retried (throws exception)
+   - Invalid transitions rejected
+
+5. **Processing Attempt Tracking Test**
+   - processing_attempts increments on each attempt
+   - last_processed_at updates on each attempt
+
+6. **Concurrent Processing Test**
+   - Multiple concurrent processIntent() calls
+   - Race condition handled gracefully
+   - No duplicate financial impact
+
+7. **Classification Test**
+   - detected_intent set during processing
+   - intent_confidence set during processing
+   - Classification cached for retries
+
+8. **Failure Recovery Test**
+   - FAILED status has status_reason
+   - Failure details captured for debugging
+
+### Usage in Code
+
+When implementing async processing:
+
+```java
+// Phase 1: Ingestion (WhatsAppMessageProcessor)
+@Async("whatsappExecutor")
+public void processIncomingMessage(String from, String text) {
+    // 1. Persist (fast)
+    UserIntentInboxEntity intent = intentInboxService.persistIntent(from, "WHATSAPP", text);
+    
+    // 2. Trigger async processing (decoupled)
+    processingEngine.processIntent(intent.getId());
+    
+    // Webhook returns immediately
+}
+
+// Phase 2: Processing (IntentProcessingEngine)
+@Async("intentProcessingExecutor")
+public void processIntent(Long intentId) {
+    UserIntentInboxEntity intent = repository.findById(intentId).orElseThrow();
+    
+    // Idempotency check
+    if (intent.getStatus() == IntentStatus.PROCESSED) {
+        return; // Already done
+    }
+    
+    // Mark as processing
+    intent.markAsProcessing();
+    repository.save(intent);
+    
+    try {
+        // Classify if needed
+        if (intent.getDetectedIntent() == null) {
+            IntentResult classification = classifier.classify(intent.getRawText());
+            intent.setDetectedIntent(classification.intent());
+            intent.setIntentConfidence(BigDecimal.valueOf(classification.confidence()));
+        }
+        
+        // Check financial impact deduplication
+        if (checkIfFinanciallyApplied(intent)) {
+            intent.markAsProcessed();
+            repository.save(intent);
+            return;
+        }
+        
+        // Process through orchestrator
+        SpeechResult result = orchestrator.process(intent.getRawText(), context);
+        
+        // Handle result
+        switch (result.getStatus()) {
+            case SAVED -> intent.markAsProcessed();
+            case FOLLOWUP -> intent.markAsNeedsInput("Follow-up required");
+            case INVALID, UNKNOWN -> intent.markAsFailed("Processing failed");
+        }
+        
+    } catch (Exception e) {
+        intent.markAsFailed(e.getMessage());
+    }
+    
+    repository.save(intent);
+}
+
+// Retry
+public void retryIntent(Long intentId) {
+    UserIntentInboxEntity intent = repository.findById(intentId).orElseThrow();
+    
+    // Validate can retry
+    if (intent.getStatus() != IntentStatus.FAILED && 
+        intent.getStatus() != IntentStatus.NEEDS_INPUT) {
+        throw new IllegalStateException("Cannot retry intent in status " + intent.getStatus());
+    }
+    
+    // Transition to RECEIVED and reprocess
+    intent.setStatus(IntentStatus.RECEIVED);
+    repository.save(intent);
+    
+    processIntent(intentId);
+}
+```
+
+### Financial Impact Deduplication
+
+The key mechanism for preventing double financial impact:
+
+```java
+private boolean checkIfFinanciallyApplied(UserIntentInboxEntity intent) {
+    // Check if transaction already exists for this intent
+    // Implementation options:
+    
+    // Option 1: Check by raw_text match
+    long existingTxns = transactionRepository.findAll().stream()
+        .filter(tx -> tx.getRawText() != null && 
+                     tx.getRawText().equals(intent.getRawText()) &&
+                     tx.isFinanciallyApplied())
+        .count();
+    
+    // Option 2: Store correlation_id in transaction (future enhancement)
+    // long existingTxns = transactionRepository
+    //     .countByCorrelationIdAndFinanciallyApplied(intent.getCorrelationId(), true);
+    
+    return existingTxns > 0;
+}
+```
+
+**Important**: This deduplication check is separate from the database-level correlation_id uniqueness constraint. The correlation_id prevents duplicate **intents**, while this check prevents duplicate **financial impact**.
+
+### Error Handling
+
+Processing errors are captured and retryable:
+
+```java
+try {
+    // Process intent
+    SpeechResult result = orchestrator.process(intent.getRawText(), context);
+    handleResult(intent, result);
+} catch (Exception e) {
+    // Capture error details
+    intent.markAsFailed(e.getMessage());
+    log.error("Failed to process intent {}: {}", intentId, e.getMessage(), e);
+}
+
+repository.save(intent);
+```
+
+Failed intents can be:
+- Retried manually via `retryIntent(intentId)`
+- Retried automatically by scheduled job (future enhancement)
+- Investigated via `status_reason` field
+
+---
+
 ## Summary
 
 **Financial rules are the contract.**

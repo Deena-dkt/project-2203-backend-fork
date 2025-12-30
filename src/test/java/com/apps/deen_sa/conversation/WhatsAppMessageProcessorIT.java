@@ -56,7 +56,7 @@ class WhatsAppMessageProcessorIT extends IntegrationTestBase {
         // Wait up to 2 seconds for async persistence to complete
         await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
             List<UserIntentInboxEntity> intents = intentRepository.findByUserIdAndStatusOrderByReceivedAtDesc(
-                    userId, IntentStatus.PENDING);
+                    userId, IntentStatus.RECEIVED);
             
             // At least one intent should be persisted
             assertTrue(intents.size() >= 1, "Intent should be persisted to inbox");
@@ -89,7 +89,7 @@ class WhatsAppMessageProcessorIT extends IntegrationTestBase {
         // Then - Wait for persistence and verify raw text is unchanged
         await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
             List<UserIntentInboxEntity> intents = intentRepository.findByUserIdAndStatusOrderByReceivedAtDesc(
-                    userId, IntentStatus.PENDING);
+                    userId, IntentStatus.RECEIVED);
             
             assertTrue(intents.size() >= 1);
             UserIntentInboxEntity intent = intents.get(0);
@@ -120,7 +120,7 @@ class WhatsAppMessageProcessorIT extends IntegrationTestBase {
         // Then - All should be persisted
         await().atMost(3, TimeUnit.SECONDS).untilAsserted(() -> {
             List<UserIntentInboxEntity> intents = intentRepository.findByUserIdAndStatusOrderByReceivedAtDesc(
-                    userId, IntentStatus.PENDING);
+                    userId, IntentStatus.RECEIVED);
             
             assertTrue(intents.size() >= 3, "All 3 messages should be persisted");
             

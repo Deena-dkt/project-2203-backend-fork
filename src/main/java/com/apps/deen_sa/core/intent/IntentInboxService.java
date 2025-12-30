@@ -60,7 +60,7 @@ public class IntentInboxService {
                 .correlationId(correlationId)
                 .rawText(rawText)
                 .receivedAt(LocalDateTime.now())
-                .status(IntentStatus.PENDING)
+                .status(IntentStatus.RECEIVED)
                 .processingAttempts(0)
                 .build();
 
