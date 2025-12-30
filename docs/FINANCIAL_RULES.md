@@ -1918,6 +1918,343 @@ If new edge cases are discovered:
 
 ---
 
+## 11. Phase 6: UI/Mobile Readiness
+
+**This section documents REST API contracts for UI/Mobile clients.**
+
+### API Purpose
+
+Phase 6 finalizes REST API contracts with pagination, ordering, and comprehensive error handling for UI and mobile applications.
+
+**Design Principles**:
+- No UI assumptions in backend
+- No WebSocket dependency
+- State-based interaction (different from WhatsApp's message-based model)
+- Pagination for all list endpoints
+- Comprehensive error responses
+
+### REST API Endpoints
+
+#### 1. Submit Intent
+
+**POST `/api/v1/intents`**
+
+Submit a new user intent for processing.
+
+**Request**:
+```json
+{
+  "userId": "user123",
+  "channel": "WEB",
+  "text": "spent 500 on groceries"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "intentId": 42,
+  "correlationId": "WEB:user123:1234567890:abc123",
+  "status": "RECEIVED",
+  "message": "Intent submitted successfully"
+}
+```
+
+**Error Response** (400 Bad Request):
+```json
+{
+  "message": "userId is required"
+}
+```
+
+**Validation**:
+- `userId` is required (not blank)
+- `text` is required (not blank)
+- `channel` defaults to "WEB" if not provided
+
+#### 2. Get Pending Action
+
+**GET `/api/v1/intents/pending?userId=user123`**
+
+Query for pending NEEDS_INPUT intent requiring user follow-up.
+
+**Response** (200 OK) - With pending action:
+```json
+{
+  "hasPendingAction": true,
+  "intentId": 42,
+  "originalText": "spent 500",
+  "statusReason": "Missing category",
+  "detectedIntent": "EXPENSE",
+  "receivedAt": "2025-12-30T10:00:00"
+}
+```
+
+**Response** (200 OK) - No pending action:
+```json
+{
+  "hasPendingAction": false
+}
+```
+
+**Use Case**: UI polls this endpoint to check if user needs to provide additional information.
+
+#### 3. Resume Intent
+
+**POST `/api/v1/intents/resume`**
+
+Resume processing with user's follow-up response.
+
+**Request**:
+```json
+{
+  "userId": "user123",
+  "channel": "WEB",
+  "responseText": "groceries"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "intentId": 43,
+  "correlationId": "WEB:user123:1234567891:def456",
+  "status": "PROCESSED",
+  "message": "Resume request processed successfully"
+}
+```
+
+**Behavior**:
+- Links follow-up to pending NEEDS_INPUT intent
+- Resumes parent intent processing
+- Returns new follow-up intent details
+
+#### 4. Get Intent History
+
+**GET `/api/v1/intents/history?userId=user123&page=0&size=20&sortBy=receivedAt&sortDirection=DESC&status=PROCESSED`**
+
+Query user's intent history with pagination and filtering.
+
+**Parameters**:
+- `userId` (required) - User identifier
+- `page` (optional, default: 0) - Page number (0-indexed)
+- `size` (optional, default: 20, max: 100) - Page size
+- `sortBy` (optional, default: "receivedAt") - Sort field
+- `sortDirection` (optional, default: "DESC") - Sort direction (ASC/DESC)
+- `status` (optional) - Filter by intent status (RECEIVED, PROCESSING, PROCESSED, NEEDS_INPUT, FAILED, IGNORED)
+
+**Response** (200 OK):
+```json
+{
+  "items": [
+    {
+      "intentId": 42,
+      "correlationId": "WEB:user123:1234567890:abc123",
+      "rawText": "spent 500 on groceries",
+      "status": "PROCESSED",
+      "detectedIntent": "EXPENSE",
+      "intentConfidence": 0.95,
+      "statusReason": null,
+      "receivedAt": "2025-12-30T10:00:00",
+      "lastProcessedAt": "2025-12-30T10:00:05",
+      "processingAttempts": 1,
+      "channel": "WEB"
+    }
+  ],
+  "totalItems": 150,
+  "totalPages": 8,
+  "currentPage": 0,
+  "pageSize": 20,
+  "hasNext": true,
+  "hasPrevious": false
+}
+```
+
+**Pagination Details**:
+- Results ordered by specified field and direction
+- Page size limited to 100 max to prevent abuse
+- Invalid status filter ignored (returns all statuses)
+
+### API Usage Examples
+
+#### Complete UI Workflow
+
+```javascript
+// 1. Submit intent
+const submitResponse = await fetch('/api/v1/intents', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    userId: 'user123',
+    channel: 'WEB',
+    text: 'spent 500 on food'
+  })
+});
+const { intentId, status } = await submitResponse.json();
+
+// 2. Poll for pending action
+const checkPending = async () => {
+  const response = await fetch(`/api/v1/intents/pending?userId=user123`);
+  const pending = await response.json();
+  
+  if (pending.hasPendingAction) {
+    // Display prompt: "Please specify category for: spent 500 on food"
+    return pending;
+  }
+  return null;
+};
+
+// 3. Resume with response
+const resumeResponse = await fetch('/api/v1/intents/resume', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    userId: 'user123',
+    channel: 'WEB',
+    responseText: 'groceries'
+  })
+});
+
+// 4. Display intent history
+const historyResponse = await fetch(
+  `/api/v1/intents/history?userId=user123&page=0&size=20`
+);
+const history = await historyResponse.json();
+// Display history.items in UI table
+```
+
+#### Pagination Example
+
+```javascript
+// Fetch first page
+const page1 = await fetch(
+  `/api/v1/intents/history?userId=user123&page=0&size=10&sortBy=receivedAt&sortDirection=DESC`
+).then(r => r.json());
+
+// Check if more pages available
+if (page1.hasNext) {
+  // Fetch next page
+  const page2 = await fetch(
+    `/api/v1/intents/history?userId=user123&page=1&size=10&sortBy=receivedAt&sortDirection=DESC`
+  ).then(r => r.json());
+}
+
+// Filter by status
+const processedOnly = await fetch(
+  `/api/v1/intents/history?userId=user123&status=PROCESSED`
+).then(r => r.json());
+```
+
+### Integration Test Requirements
+
+Phase 6 implementations must pass these tests:
+
+1. **Pagination Tests** (5 tests)
+   - First page returns correct items
+   - Middle page has both previous and next
+   - Last page has no next
+   - Empty results handled
+   - Max size limit enforced (100 max)
+
+2. **Ordering Tests** (2 tests)
+   - Descending order (newest first)
+   - Ascending order (oldest first)
+
+3. **Status Filter Tests** (2 tests)
+   - Valid status filter applied
+   - Invalid status filter ignored
+
+4. **Validation Tests** (2 tests)
+   - Missing userId returns 400
+   - Missing text returns 400
+
+5. **Error Handling Tests** (2 tests)
+   - Valid submission succeeds
+   - Resume without pending creates new intent
+
+6. **Complete Workflow Test** (1 test)
+   - Submit → Check history → Simulate NEEDS_INPUT → Check pending → Resume → Check history again
+
+**Total**: 14 integration tests for Phase 6
+
+### API Invariants
+
+#### Invariant 1: Pagination Consistency
+
+Pagination must remain consistent across page requests.
+
+- Same query parameters → same total count
+- Page boundaries do not overlap
+- All items retrievable via pagination
+- Page size never exceeds 100
+
+#### Invariant 2: Error Response Format
+
+All errors return consistent format with descriptive messages.
+
+- 400 for validation errors (missing required fields)
+- 500 for server errors
+- Error messages human-readable
+- No stack traces exposed to client
+
+#### Invariant 3: Parameter Validation
+
+Invalid parameters handled gracefully.
+
+- Negative page numbers default to 0
+- Page size < 1 defaults to 20
+- Page size > 100 limited to 100
+- Invalid status filter ignored (returns all)
+- Invalid sort direction defaults to DESC
+
+#### Invariant 4: No UI Assumptions
+
+Backend APIs are UI-agnostic.
+
+- No WebSocket requirements
+- No session state
+- Pure REST (stateless)
+- Works for web, mobile, and future clients
+
+### Channel Comparison
+
+| Feature | WhatsApp | UI/Mobile |
+|---------|----------|-----------|
+| **Interaction Model** | Message-based | State-based |
+| **Submit Intent** | Webhook → async | POST /api/v1/intents |
+| **Check Pending** | N/A (push via WhatsApp) | GET /api/v1/intents/pending |
+| **Resume** | New message → webhook | POST /api/v1/intents/resume |
+| **History** | N/A | GET /api/v1/intents/history |
+| **Pagination** | N/A | Full support |
+| **Ordering** | N/A | Customizable |
+
+### Future Enhancements
+
+Potential Phase 6+ improvements:
+
+**Filtering**:
+- Date range filters
+- Channel filters
+- Confidence threshold filters
+
+**Advanced Ordering**:
+- Multi-field sorting
+- Custom sort orders
+
+**Bulk Operations**:
+- Batch intent submission
+- Bulk status updates
+
+**Real-time Updates** (without WebSockets):
+- Server-Sent Events (SSE) for pending actions
+- Long polling for status changes
+
+**Caching**:
+- Response caching for history queries
+- ETag support for conditional requests
+
+---
+
 ## Summary
 
 **Financial rules are the contract.**

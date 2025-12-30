@@ -1,5 +1,7 @@
 package com.apps.deen_sa.core.intent;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -49,4 +51,14 @@ public interface UserIntentInboxRepository extends JpaRepository<UserIntentInbox
      * Phase 3: Find all follow-ups for a parent intent
      */
     List<UserIntentInboxEntity> findByFollowupParentIdOrderByReceivedAt(Long parentId);
+
+    /**
+     * Phase 6: Find all intents for a user with pagination and sorting
+     */
+    Page<UserIntentInboxEntity> findByUserId(String userId, Pageable pageable);
+
+    /**
+     * Phase 6: Find all intents for a user with specific status, with pagination and sorting
+     */
+    Page<UserIntentInboxEntity> findByUserIdAndStatus(String userId, IntentStatus status, Pageable pageable);
 }
