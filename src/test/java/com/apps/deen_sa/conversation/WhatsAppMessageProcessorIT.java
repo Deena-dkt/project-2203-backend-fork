@@ -42,7 +42,7 @@ class WhatsAppMessageProcessorIT extends IntegrationTestBase {
     }
 
     @Test
-    void testIntentIsPersistiedBeforeProcessing() throws Exception {
+    void testIntentIsPersistedBeforeProcessing() throws Exception {
         // Given
         String userId = "test-user-123";
         String message = "spent 500 on groceries";
