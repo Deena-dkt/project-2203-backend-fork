@@ -50,17 +50,17 @@ Database Layer (PostgreSQL)
 
 ### 1.2 Strategy Pattern
 
-**Used In**: ValueAdjustmentService
+**Used In**: StateMutationService
 
 **Purpose**: Handle different adjustment logic for different container types
 
 **Implementation**:
 ```java
-interface ValueAdjustmentStrategy {
+interface StateMutationStrategy {
     void apply(StateContainerEntity container, StateMutationCommand cmd);
 }
 
-class CashStrategy implements ValueAdjustmentStrategy {
+class CashStrategy implements StateMutationStrategy {
     // Simple debit/credit
 }
 

@@ -44,7 +44,7 @@ A financial management system that uses natural language processing to allow use
 
 ## Data Model (5 Core Entities)
 
-### 1. StateChangeEntity (transaction_rec)
+### 1. StateChangeEntity (state_change)
 **Purpose**: Universal transaction recording  
 **Key Fields**:
 - amount, quantity, unit
@@ -57,7 +57,7 @@ A financial management system that uses natural language processing to allow use
 - details (JSONB for flexible metadata)
 - tags (JSONB array)
 
-### 2. StateContainerEntity (value_container)
+### 2. StateContainerEntity (state_container)
 **Purpose**: Universal container for all value-holding entities  
 **Container Types**: CASH, BANK, CREDIT, INVENTORY, PAYABLE, RECEIVABLE  
 **Key Fields**:
@@ -68,7 +68,7 @@ A financial management system that uses natural language processing to allow use
 - overLimit, overLimitAmount (credit overflow tracking)
 - details (JSONB for type-specific data like EMI details)
 
-### 3. StateMutationEntity (value_adjustments)
+### 3. StateMutationEntity (state_mutation)
 **Purpose**: Audit trail for all container balance changes  
 **Key Fields**:
 - transactionId (which transaction caused this)
@@ -108,11 +108,11 @@ A financial management system that uses natural language processing to allow use
 - Semantic matching of user tags to canonical tags
 - Prevent tag proliferation
 
-### 4. ValueContainerService
+### 4. StateContainerService
 - CRUD for containers
 - Get active containers for user
 
-### 5. ValueAdjustmentService
+### 5. StateMutationService
 - Apply financial adjustments using Strategy pattern
 - Create audit trail
 - Update container balances atomically
@@ -330,7 +330,7 @@ src/main/java/com/apps/deen_sa/
 ├── controller/ (4 controllers)
 ├── dto/ (19 DTOs)
 ├── utils/ (3 enums + utilities)
-├── strategy/ (ValueAdjustmentStrategy + implementations)
+├── strategy/ (StateMutationStrategy + implementations)
 ├── resolver/ (TimeRange, Query, Strategy resolvers)
 ├── evaluator/ (ExpenseCompletenessEvaluator)
 └── mapper/ (DTO ↔ Entity mappers)

@@ -58,16 +58,16 @@ com.apps.deen_sa
 │   │   └── QueryContextFormatter
 │   │
 │   └── account
-│       ├── ValueContainerService
-│       ├── ValueAdjustmentService
+│       ├── StateContainerService
+│       ├── StateMutationService
 │       ├── AccountSetupHandler
 │       ├── AccountSetupValidator
-│       ├── ValueContainerCache
-│       ├── InMemoryValueContainerCache
+│       ├── StateContainerCache
+│       ├── InMemoryStateContainerCache
 │       └── strategy
 │           ├── AdjustmentCommandFactory (creates StateMutationCommands)
-│           ├── ValueAdjustmentStrategyResolver
-│           ├── ValueAdjustmentStrategy
+│           ├── StateMutationStrategyResolver
+│           ├── StateMutationStrategy
 │           ├── CreditSettlementStrategy
 │           ├── CashLikeStrategy
 │           ├── CreditCardStrategy

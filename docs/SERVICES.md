@@ -163,9 +163,9 @@ List<String> normalized = tagNormalizationService.normalizeTags(userTags);
 
 ---
 
-## 5. ValueContainerService
+## 5. StateContainerService
 
-**Purpose**: Manage ValueContainer CRUD and queries
+**Purpose**: Manage StateContainer CRUD and queries
 
 ### Responsibilities
 - Create new containers (accounts, loans, wallets)
@@ -192,9 +192,9 @@ Creates a new container from account setup data
 
 ---
 
-## 6. ValueAdjustmentService
+## 6. StateMutationService
 
-**Purpose**: Apply financial adjustments to value containers
+**Purpose**: Apply financial adjustments to state containers
 
 ### Responsibilities
 - Execute balance changes
@@ -209,7 +209,7 @@ Creates a new container from account setup data
 **Flow**:
 1. **Resolve Strategy**: Get appropriate strategy for container type
    ```java
-   ValueAdjustmentStrategy strategy = strategyResolver.resolve(container.getContainerType());
+   StateMutationStrategy strategy = strategyResolver.resolve(container.getContainerType());
    ```
 
 2. **Execute Adjustment**: Apply strategy
@@ -243,8 +243,8 @@ Different strategies for different container types:
 
 ### Dependencies
 - `StateContainerRepository`: Container persistence
-- `ValueAdjustmentRepository`: Audit trail
-- `ValueAdjustmentStrategyResolver`: Strategy selection
+- `StateMutationRepository`: Audit trail
+- `StateMutationStrategyResolver`: Strategy selection
 
 ### Design Notes
 - Idempotent if called with same transaction ID
@@ -258,7 +258,7 @@ Different strategies for different container types:
 ### Pattern 1: Handler → Service → Repository
 ```
 ExpenseHandler
-  → ValueContainerService.getActiveContainers()
+  → StateContainerService.getActiveContainers()
   → StateContainerRepository.findByOwnerIdAndStatus()
 ```
 
@@ -272,7 +272,7 @@ LoanAnalysisService
 
 ### Pattern 3: Service → Strategy → Repository
 ```
-ValueAdjustmentService
+StateMutationService
   → Resolve strategy based on container type
   → Execute strategy
   → Save container + audit record
@@ -282,8 +282,8 @@ ValueAdjustmentService
 ```
 ExpenseHandler
   → TagNormalizationService.normalizeTags()
-  → ValueContainerService.findById()
-  → ValueAdjustmentService.apply()
+  → StateContainerService.findById()
+  → StateMutationService.apply()
 ```
 
 ---
@@ -307,15 +307,15 @@ Services are designed to be composed
 // Handler composes multiple services
 ExpenseHandler {
     TagNormalizationService tagService;
-    ValueContainerService containerService;
-    ValueAdjustmentService adjustmentService;
+    StateContainerService containerService;
+    StateMutationService adjustmentService;
     ExpenseCompletenessEvaluator evaluator;
 }
 ```
 
 ### 4. Strategy for Variation
 Use Strategy pattern for type-specific behavior
-- ValueAdjustmentStrategy for different containers
+- StateMutationStrategy for different containers
 - Avoids if/else chains
 - Easy to extend
 
@@ -334,7 +334,7 @@ Services use Spring's declarative transaction management:
 ```java
 @Service
 @Transactional // Default: read-write
-public class ValueAdjustmentService {
+public class StateMutationService {
     
     @Transactional(readOnly = true)
     public StateContainerEntity findById(Long id) {

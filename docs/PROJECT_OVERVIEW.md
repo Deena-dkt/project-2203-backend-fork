@@ -113,15 +113,15 @@ src/main/java/com/apps/deen_sa/
 │   │   └── QueryContextFormatter.java
 │   │
 │   └── account/                        # Account/container management
-│       ├── ValueContainerService.java
-│       ├── ValueAdjustmentService.java
+│       ├── StateContainerService.java
+│       ├── StateMutationService.java
 │       ├── AccountSetupHandler.java
 │       ├── AccountSetupValidator.java
-│       ├── ValueContainerCache.java
-│       ├── InMemoryValueContainerCache.java
+│       ├── StateContainerCache.java
+│       ├── InMemoryStateContainerCache.java
 │       └── strategy/                   # State mutation strategies
-│           ├── ValueAdjustmentStrategy.java
-│           ├── ValueAdjustmentStrategyResolver.java
+│           ├── StateMutationStrategy.java
+│           ├── StateMutationStrategyResolver.java
 │           ├── AdjustmentCommandFactory.java (creates StateMutationCommands)
 │           ├── CreditSettlementStrategy.java
 │           ├── CashLikeStrategy.java
@@ -279,7 +279,7 @@ Transactions are evaluated for completeness:
 StateChange Created
   → Resolve Source Container (Bank/Credit/Cash)
   → Create StateMutationCommand
-  → Apply ValueAdjustmentStrategy
+  → Apply StateMutationStrategy
   → Update Container Balance
   → Create StateMutationEntity (audit trail)
   → Mark StateChange as financiallyApplied=true
