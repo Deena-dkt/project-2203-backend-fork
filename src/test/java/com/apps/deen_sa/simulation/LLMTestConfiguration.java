@@ -2,10 +2,12 @@ package com.apps.deen_sa.simulation;
 
 import com.apps.deen_sa.dto.AccountSetupDto;
 import com.apps.deen_sa.dto.AssetDto;
+import com.apps.deen_sa.dto.AssetBuyDto;
 import com.apps.deen_sa.dto.ExpenseDto;
 import com.apps.deen_sa.dto.LiabilityPaymentDto;
 import com.apps.deen_sa.llm.impl.AccountSetupClassifier;
 import com.apps.deen_sa.llm.impl.AssetClassifier;
+import com.apps.deen_sa.llm.impl.AssetBuyClassifier;
 import com.apps.deen_sa.llm.impl.ExpenseClassifier;
 import com.apps.deen_sa.llm.impl.LiabilityPaymentClassifier;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -213,5 +215,114 @@ public class LLMTestConfiguration {
                lowerText.contains("units") || 
                lowerText.contains("grams") || 
                lowerText.contains("gold");
+    }
+
+    @Bean
+    @Primary
+    public AssetBuyClassifier assetBuyClassifier() {
+        AssetBuyClassifier mock = mock(AssetBuyClassifier.class);
+        
+        when(mock.extractBuy(anyString())).thenAnswer(invocation -> {
+            String text = invocation.getArgument(0);
+            AssetBuyDto dto = new AssetBuyDto();
+            
+            String lowerText = text.toLowerCase();
+            
+            // Check if this is a buy transaction
+            if (lowerText.contains("bought") || lowerText.contains("purchased")) {
+                dto.setValid(true);
+                
+                // Extract quantity
+                String[] words = text.split("\\s+");
+                BigDecimal quantity = null;
+                BigDecimal price = null;
+                int quantityIndex = -1;
+                
+                for (int i = 0; i < words.length; i++) {
+                    try {
+                        BigDecimal num = new BigDecimal(words[i]);
+                        if (quantity == null) {
+                            quantity = num;
+                            quantityIndex = i;
+                        } else if (price == null) {
+                            price = num;
+                        }
+                    } catch (NumberFormatException e) {
+                        // Continue searching
+                    }
+                }
+                
+                dto.setQuantity(quantity);
+                
+                // Handle different patterns for price
+                if (price != null) {
+                    // Check if "for" appears before price (total amount pattern)
+                    if (lowerText.contains(" for ") && lowerText.indexOf(" for ") < lowerText.lastIndexOf(price.toString())) {
+                        // "bought for 38000 around 100 shares" - price is total amount
+                        if (quantity != null) {
+                            dto.setPricePerUnit(price.divide(quantity, 2, java.math.RoundingMode.HALF_UP));
+                        }
+                    } else {
+                        // "bought at 380" - price is per unit
+                        dto.setPricePerUnit(price);
+                    }
+                }
+                
+                // Extract asset identifier
+                if (quantityIndex >= 0 && quantityIndex < words.length - 1) {
+                    String nextWord = words[quantityIndex + 1];
+                    String lowerNextWord = nextWord.toLowerCase();
+                    
+                    if (lowerNextWord.equals("units") || lowerNextWord.equals("grams") || lowerNextWord.equals("shares")) {
+                        // Unit comes right after number, look for identifier before quantity
+                        for (int i = quantityIndex - 1; i >= 0; i--) {
+                            String word = words[i];
+                            if (!word.equalsIgnoreCase("bought") && 
+                                !word.equalsIgnoreCase("purchased") && 
+                                !word.equalsIgnoreCase("I")) {
+                                dto.setAssetIdentifier(word);
+                                break;
+                            }
+                        }
+                        
+                        // If not found before, check after unit for "of X"
+                        if (dto.getAssetIdentifier() == null && quantityIndex < words.length - 2) {
+                            String afterUnit = words[quantityIndex + 2];
+                            if (afterUnit.equalsIgnoreCase("of") && quantityIndex < words.length - 3) {
+                                StringBuilder identifier = new StringBuilder();
+                                for (int i = quantityIndex + 3; i < words.length; i++) {
+                                    String word = words[i];
+                                    if (word.equalsIgnoreCase("mutual") || word.equalsIgnoreCase("fund") ||
+                                        word.equalsIgnoreCase("at") || word.equalsIgnoreCase("for")) {
+                                        break;
+                                    }
+                                    if (identifier.length() > 0) identifier.append(" ");
+                                    identifier.append(word);
+                                }
+                                if (identifier.length() > 0) {
+                                    dto.setAssetIdentifier(identifier.toString());
+                                }
+                            }
+                        }
+                    } else {
+                        // Identifier right after number
+                        dto.setAssetIdentifier(nextWord);
+                    }
+                }
+                
+                // Extract unit
+                if (lowerText.contains("shares")) dto.setUnit("shares");
+                else if (lowerText.contains("units")) dto.setUnit("units");
+                else if (lowerText.contains("grams")) dto.setUnit("grams");
+                
+            } else {
+                dto.setValid(false);
+                dto.setReason("Could not extract buy transaction details");
+            }
+            
+            return dto;
+        });
+        
+        return mock;
     }
 }
