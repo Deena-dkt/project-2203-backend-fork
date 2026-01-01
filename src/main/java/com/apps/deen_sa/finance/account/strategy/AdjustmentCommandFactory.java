@@ -40,7 +40,7 @@ public class AdjustmentCommandFactory {
     public StateMutationCommand forTransferDebit(StateChangeEntity tx, String reason) {
         return new StateMutationCommand(
                 tx.getAmount(),
-                MutationTypeEnum.DEBIT,
+                MutationTypeEnum.PAYMENT,
                 reason,
                 tx.getId(),
                 tx.getTimestamp() != null ? tx.getTimestamp() : Instant.now()

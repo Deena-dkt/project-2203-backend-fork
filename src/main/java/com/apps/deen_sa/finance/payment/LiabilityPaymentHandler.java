@@ -230,22 +230,15 @@ public class LiabilityPaymentHandler implements SpeechHandler {
         StateMutationStrategy strategy = strategyResolver.resolve(targetContainer);
 
         if (strategy instanceof CreditSettlementStrategy) {
-            // Use specialized payment method that reduces outstanding
-            StateMutationCommand creditCommand = adjustmentCommandFactory.forTransferCredit(tx, reason);
-            
-            // Create audit trail
-            stateMutationService.apply(targetContainer, creditCommand);
-            
             // Apply payment to reduce outstanding
             ((CreditSettlementStrategy) strategy).applyPayment(targetContainer, tx.getAmount());
-            
             // Save updated container
             targetContainer.setLastActivityAt(Instant.now());
             stateContainerService.UpdateValueContainer(targetContainer);
         } else {
-            // Fallback: use regular credit adjustment
-            StateMutationCommand creditCommand = adjustmentCommandFactory.forTransferCredit(tx, reason);
-            stateMutationService.apply(targetContainer, creditCommand);
+            throw new IllegalStateException(
+                    "Target container does not support liability payments"
+            );
         }
     }
 }

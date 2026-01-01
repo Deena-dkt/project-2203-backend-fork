@@ -1,6 +1,7 @@
 package com.apps.deen_sa.core.mutation;
 
 public enum MutationTypeEnum {
-    DEBIT,   // money goes out of the container
-    CREDIT   // money comes into the container
+    DEBIT,    // value increases for liabilities, decreases for assets
+    CREDIT,   // value decreases for liabilities, increases for assets
+    PAYMENT   // explicit liability settlement
 }

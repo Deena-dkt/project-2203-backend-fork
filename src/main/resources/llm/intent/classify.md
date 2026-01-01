@@ -144,5 +144,29 @@ CRITICAL RULES (NON-NEGOTIABLE)
 
 ----------------------------------------
 
+CRITICAL DISAMBIGUATION RULE (VERY IMPORTANT)
+
+If the user is paying FOR a product or service
+AND mentions a credit card ONLY as the payment method
+(e.g. "paid by credit card", "used my credit card", "on card"),
+THEN this is an EXPENSE.
+
+This is NOT a liability payment.
+
+Examples (EXPENSE):
+- "Movie tickets 1400 paid by credit card"
+- "Bought groceries using credit card"
+- "Amazon purchase on my HDFC card"
+
+LIABILITY_PAYMENT applies ONLY when the user is paying
+TOWARDS the credit card or loan itself.
+Do NOT confuse payment instrument with payment target.
+
+Examples (LIABILITY_PAYMENT):
+- "Paid 10,000 to my credit card"
+- "Cleared my HDFC card bill"
+- "Paid EMI for personal loan"
+
+
 User message:
 "%s"
