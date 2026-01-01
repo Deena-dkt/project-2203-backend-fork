@@ -11,11 +11,19 @@ com.apps.deen_sa
 │   │   ├── StateChangeTypeEnum
 │   │   ├── StateContainerEntity
 │   │   ├── StateContainerRepository
-│   │   └── CompletenessLevelEnum
+│   │   ├── StateContainerService
+│   │   ├── CompletenessLevelEnum
+│   │   └── cache
+│   │       ├── StateContainerCache
+│   │       └── InMemoryStateContainerCache
 │   └── mutation
 │       ├── StateMutationEntity
 │       ├── StateMutationRepository
-│       └── MutationTypeEnum
+│       ├── StateMutationService
+│       ├── MutationTypeEnum
+│       └── strategy
+│           ├── StateMutationStrategy (interface - SPI contract)
+│           └── StateMutationStrategyResolver (generic resolver)
 │
 ├── conversation (Conversational Orchestration)
 │   ├── SpeechOrchestrator
@@ -58,20 +66,14 @@ com.apps.deen_sa
 │   │   └── QueryContextFormatter
 │   │
 │   └── account
-│       ├── ValueContainerService
-│       ├── ValueAdjustmentService
 │       ├── AccountSetupHandler
 │       ├── AccountSetupValidator
-│       ├── ValueContainerCache
-│       ├── InMemoryValueContainerCache
 │       └── strategy
-│           ├── AdjustmentCommandFactory (creates StateMutationCommands)
-│           ├── ValueAdjustmentStrategyResolver
-│           ├── ValueAdjustmentStrategy
-│           ├── CreditSettlementStrategy
-│           ├── CashLikeStrategy
-│           ├── CreditCardStrategy
-│           └── LoanStrategy
+│           ├── AdjustmentCommandFactory (finance-specific)
+│           ├── CreditSettlementStrategy (finance-specific interface)
+│           ├── CashLikeStrategy (implements core.mutation.strategy.StateMutationStrategy)
+│           ├── CreditCardStrategy (implements core.mutation.strategy.StateMutationStrategy)
+│           └── LoanStrategy (implements core.mutation.strategy.StateMutationStrategy)
 │
 ├── food (Reserved for Future)
 │   ├── recipe (empty)

@@ -1,4 +1,4 @@
-package com.apps.deen_sa.finance.account;
+package com.apps.deen_sa.core.state.cache;
 
 import com.apps.deen_sa.core.state.StateContainerEntity;
 import org.springframework.stereotype.Component;
@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-public class InMemoryValueContainerCache implements ValueContainerCache {
+public class InMemoryStateContainerCache implements StateContainerCache {
 
     private final Map<Long, CacheEntry> cache = new ConcurrentHashMap<>();
 

@@ -66,11 +66,19 @@ src/main/java/com/apps/deen_sa/
 │   │   ├── StateChangeTypeEnum.java
 │   │   ├── StateContainerEntity.java
 │   │   ├── StateContainerRepository.java
-│   │   └── CompletenessLevelEnum.java
+│   │   ├── StateContainerService.java
+│   │   ├── CompletenessLevelEnum.java
+│   │   └── cache/                      # State container caching
+│   │       ├── StateContainerCache.java
+│   │       └── InMemoryStateContainerCache.java
 │   └── mutation/                       # State mutation concepts
 │       ├── StateMutationEntity.java
 │       ├── StateMutationRepository.java
-│       └── MutationTypeEnum.java
+│       ├── StateMutationService.java
+│       ├── MutationTypeEnum.java
+│       └── strategy/                   # SPI contracts only
+│           ├── StateMutationStrategy.java (interface)
+│           └── StateMutationStrategyResolver.java (generic resolver)
 │
 ├── conversation/                        # 💬 CONVERSATION DOMAIN
 │   ├── SpeechOrchestrator.java        # Main conversation orchestrator
@@ -112,21 +120,15 @@ src/main/java/com/apps/deen_sa/
 │   │   ├── TimeRangeResolver.java
 │   │   └── QueryContextFormatter.java
 │   │
-│   └── account/                        # Account/container management
-│       ├── ValueContainerService.java
-│       ├── ValueAdjustmentService.java
+│   └── account/                        # Account setup subdomain
 │       ├── AccountSetupHandler.java
 │       ├── AccountSetupValidator.java
-│       ├── ValueContainerCache.java
-│       ├── InMemoryValueContainerCache.java
-│       └── strategy/                   # State mutation strategies
-│           ├── ValueAdjustmentStrategy.java
-│           ├── ValueAdjustmentStrategyResolver.java
-│           ├── AdjustmentCommandFactory.java (creates StateMutationCommands)
-│           ├── CreditSettlementStrategy.java
-│           ├── CashLikeStrategy.java
-│           ├── CreditCardStrategy.java
-│           └── LoanStrategy.java
+│       └── strategy/                   # Finance-specific strategies
+│           ├── AdjustmentCommandFactory.java (creates finance commands)
+│           ├── CreditSettlementStrategy.java (finance-specific interface)
+│           ├── CashLikeStrategy.java (implements core SPI)
+│           ├── CreditCardStrategy.java (implements core SPI)
+│           └── LoanStrategy.java (implements core SPI)
 │
 ├── food/                                # 🥘 FOOD DOMAIN (reserved for future)
 │   ├── recipe/                         # (empty)
@@ -279,7 +281,7 @@ Transactions are evaluated for completeness:
 StateChange Created
   → Resolve Source Container (Bank/Credit/Cash)
   → Create StateMutationCommand
-  → Apply ValueAdjustmentStrategy
+  → Apply StateMutationStrategy
   → Update Container Balance
   → Create StateMutationEntity (audit trail)
   → Mark StateChange as financiallyApplied=true

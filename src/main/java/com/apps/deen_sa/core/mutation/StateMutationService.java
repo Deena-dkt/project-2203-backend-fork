@@ -1,31 +1,32 @@
-package com.apps.deen_sa.finance.account;
+package com.apps.deen_sa.core.mutation;
 
 import com.apps.deen_sa.dto.StateMutationCommand;
 import com.apps.deen_sa.core.mutation.StateMutationEntity;
 import com.apps.deen_sa.core.state.StateContainerEntity;
 import com.apps.deen_sa.core.mutation.StateMutationRepository;
-import com.apps.deen_sa.finance.account.strategy.ValueAdjustmentStrategyResolver;
-import com.apps.deen_sa.finance.account.strategy.ValueAdjustmentStrategy;
+import com.apps.deen_sa.core.mutation.strategy.StateMutationStrategyResolver;
+import com.apps.deen_sa.core.mutation.strategy.StateMutationStrategy;
+import com.apps.deen_sa.core.state.StateContainerService;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
 @Service
-public class ValueAdjustmentService {
+public class StateMutationService {
 
     private final StateMutationRepository adjustmentRepository;
-    private final ValueAdjustmentStrategyResolver strategyResolver;
-    private final ValueContainerService valueContainerService;
+    private final StateMutationStrategyResolver strategyResolver;
+    private final StateContainerService stateContainerService;
 
-    public ValueAdjustmentService(
+    public StateMutationService(
             StateMutationRepository adjustmentRepository,
-            ValueAdjustmentStrategyResolver strategyResolver,
-            ValueContainerService valueContainerService
+            StateMutationStrategyResolver strategyResolver,
+            StateContainerService stateContainerService
     ) {
         this.adjustmentRepository = adjustmentRepository;
         this.strategyResolver = strategyResolver;
-        this.valueContainerService = valueContainerService;
+        this.stateContainerService = stateContainerService;
     }
 
     @Transactional
@@ -45,13 +46,13 @@ public class ValueAdjustmentService {
         adjustmentRepository.save(audit);
 
         // 2️⃣ Apply strategy
-        ValueAdjustmentStrategy strategy =
+        StateMutationStrategy strategy =
                 strategyResolver.resolve(container);
 
         strategy.apply(container, command);
 
         // 3️⃣ Persist container
         container.setLastActivityAt(Instant.now());
-        valueContainerService.UpdateValueContainer(container);
+        stateContainerService.UpdateValueContainer(container);
     }
 }
