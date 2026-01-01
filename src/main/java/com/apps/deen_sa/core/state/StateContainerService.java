@@ -27,6 +27,8 @@ public class StateContainerService {
 
     public void UpdateValueContainer (StateContainerEntity entity) {
         repository.save(entity);
+        // Evict cache to ensure next read gets fresh data
+        cache.evict(entity.getOwnerId());
     }
 
     public List<StateContainerEntity> getActiveContainers(Long ownerId) {
