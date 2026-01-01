@@ -8,6 +8,8 @@ import com.apps.deen_sa.core.state.StateChangeRepository;
 import com.apps.deen_sa.core.state.StateContainerEntity;
 import com.apps.deen_sa.core.state.StateContainerRepository;
 import com.apps.deen_sa.simulation.LLMTestConfiguration;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
@@ -43,8 +45,8 @@ public class AssetAccountSetupIT extends IntegrationTestBase {
     @Autowired
     TransactionTemplate transactionTemplate;
 
-    @org.junit.jupiter.api.BeforeEach
-    @org.junit.jupiter.api.AfterEach
+    @BeforeEach
+    @AfterEach
     void cleanupTestData() {
         transactionTemplate.execute(status -> {
             transactionRepository.deleteAll();

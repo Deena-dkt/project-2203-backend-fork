@@ -122,10 +122,9 @@ public class LLMTestConfiguration {
             String text = invocation.getArgument(0);
             AssetDto dto = new AssetDto();
             
-            // Simple parsing for common asset declarations
             String lowerText = text.toLowerCase();
             
-            if (lowerText.contains("shares") || lowerText.contains("units") || lowerText.contains("grams") || lowerText.contains("gold")) {
+            if (isAssetDeclaration(lowerText)) {
                 dto.setValid(true);
                 
                 // Extract quantity (look for numbers)
@@ -145,22 +144,16 @@ public class LLMTestConfiguration {
                 }
                 
                 // Extract asset identifier
+                // Patterns supported:
+                // "100 ITC shares" -> identifier=ITC, unit=shares
+                // "50 units of SBI Bluechip" -> identifier=SBI Bluechip, unit=units
+                // "20 grams of gold" -> identifier=gold, unit=grams
                 if (quantityIndex >= 0 && quantityIndex < words.length - 1) {
                     String nextWord = words[quantityIndex + 1];
                     String lowerNextWord = nextWord.toLowerCase();
                     
-                    // Handle different patterns:
-                    // "100 ITC shares" -> ITC is identifier
-                    // "50 units of SBI Bluechip" -> SBI Bluechip is identifier
-                    // "20 grams of gold" -> gold is identifier
-                    
                     if (lowerNextWord.equals("units") || lowerNextWord.equals("grams") || lowerNextWord.equals("shares")) {
-                        // Unit comes right after number, look for identifier after unit
-                        // Could be "100 shares" (no identifier yet) or "100 shares ITC" (rare)
-                        // Most common: identifier comes BEFORE quantity like "ITC shares"
-                        // But our test cases have identifier AFTER quantity
-                        // Actually, let's look for pattern: number + identifier + unit
-                        // OR: number + unit + "of" + identifier
+                        // Unit comes right after number
                         if (quantityIndex < words.length - 2) {
                             String afterUnit = words[quantityIndex + 2];
                             if (afterUnit.equalsIgnoreCase("of") && quantityIndex < words.length - 3) {
@@ -213,5 +206,12 @@ public class LLMTestConfiguration {
         });
         
         return mock;
+    }
+    
+    private static boolean isAssetDeclaration(String lowerText) {
+        return lowerText.contains("shares") || 
+               lowerText.contains("units") || 
+               lowerText.contains("grams") || 
+               lowerText.contains("gold");
     }
 }
