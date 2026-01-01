@@ -17,7 +17,8 @@ public class AssetStrategy implements StateMutationStrategy {
 
     @Override
     public boolean supports(StateContainerEntity container) {
-        return "ASSET".equals(container.getContainerType());
+        return container.getContainerType() != null && 
+               container.getContainerType().equals("ASSET");
     }
 
     @Override

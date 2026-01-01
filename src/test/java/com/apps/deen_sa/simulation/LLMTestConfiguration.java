@@ -255,13 +255,15 @@ public class LLMTestConfiguration {
                 dto.setQuantity(quantity);
                 
                 // Handle different patterns for price
-                if (price != null) {
+                if (price != null && quantity != null && quantity.signum() > 0) {
                     // Check if "for" appears before price (total amount pattern)
-                    if (lowerText.contains(" for ") && lowerText.indexOf(" for ") < lowerText.lastIndexOf(price.toString())) {
+                    String priceStr = price.toString();
+                    int forIndex = lowerText.indexOf(" for ");
+                    int priceIndex = lowerText.lastIndexOf(priceStr);
+                    
+                    if (forIndex != -1 && priceIndex != -1 && forIndex < priceIndex) {
                         // "bought for 38000 around 100 shares" - price is total amount
-                        if (quantity != null) {
-                            dto.setPricePerUnit(price.divide(quantity, 2, java.math.RoundingMode.HALF_UP));
-                        }
+                        dto.setPricePerUnit(price.divide(quantity, 2, java.math.RoundingMode.HALF_UP));
                     } else {
                         // "bought at 380" - price is per unit
                         dto.setPricePerUnit(price);
