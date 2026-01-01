@@ -45,7 +45,7 @@ public class FuzzSimulationIT extends IntegrationTestBase {
     com.apps.deen_sa.finance.payment.LiabilityPaymentHandler liabilityPaymentHandler;
 
     @Autowired
-    com.apps.deen_sa.finance.account.StateContainerService stateContainerService;
+    com.apps.deen_sa.core.state.StateContainerService stateContainerService;
 
     @Test
     void runFuzzSimulations() {

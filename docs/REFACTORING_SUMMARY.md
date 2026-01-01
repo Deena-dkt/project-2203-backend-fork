@@ -13,18 +13,33 @@ December 29, 2025
 
 #### core.state
 - **StateChangeEntity** (from entity)
-- **TransactionRepository** (from repo)
-- **TransactionTypeEnum** (from utils)
+- **StateChangeRepository** (from repo)
+- **StateChangeTypeEnum** (from utils)
+- **StateContainerEntity** (from entity)
+- **StateContainerRepository** (from repo)
+- **StateContainerService** (from finance.account)
+- **CompletenessLevelEnum** (from utils)
+
+#### core.state.cache
+- **StateContainerCache** (from finance.account)
+- **InMemoryStateContainerCache** (from finance.account)
 
 #### core.mutation  
-- **CompletenessLevelEnum** (from utils)
-- **StateContainerEntity** (from entity)
 - **StateMutationEntity** (from entity)
-- **AdjustmentTypeEnum** (from utils)
-- **ValueContainerRepo** (from repo)
-- **ValueAdjustmentRepository** (from repo)
+- **StateMutationRepository** (from repo)
+- **StateMutationService** (from finance.account)
+- **MutationTypeEnum** (from utils)
 
-**Rationale:** These are foundational business concepts used across multiple domains. No dependencies on finance, food, or conversation domains.
+#### core.mutation.strategy
+- **AdjustmentCommandFactory** (from finance.account.strategy)
+- **StateMutationStrategyResolver** (from finance.account.strategy)
+- **StateMutationStrategy** (from finance.account.strategy)
+- **CreditSettlementStrategy** (from finance.account.strategy)
+- **CashLikeStrategy** (from finance.account.strategy)
+- **CreditCardStrategy** (from finance.account.strategy)
+- **LoanStrategy** (from finance.account.strategy)
+
+**Rationale:** These are foundational business concepts used across multiple domains. Services and strategies that operate on core entities belong in the core package to maintain the shared kernel pattern. No dependencies on finance, food, or conversation domains.
 
 ---
 
@@ -79,23 +94,10 @@ December 29, 2025
 
 #### finance.account
 **Classes Moved:**
-- **StateContainerService** (from service)
-- **StateMutationService** (from service)
 - **AccountSetupHandler** (from handler)
 - **AccountSetupValidator** (from validator)
-- **StateContainerCache** (from cache)
-- **InMemoryStateContainerCache** (from cache)
 
-#### finance.account.strategy
-**Classes Moved:**
-- **StateMutationCommandFactory** (from resolver)
-- **StateMutationStrategyResolver** (from resolver)
-- **StateMutationStrategy** (from strategy)
-- **CreditSettlementStrategy** (from strategy)
-- **CashLikeStrategy** (from strategy.impl)
-- **CreditCardStrategy** (from strategy.impl)
-
-**Rationale:** Finance domain with clear sub-domains for different concerns. Strategy pattern implementations co-located with their domain (account management).
+**Rationale:** Account setup is finance-domain specific, handling user onboarding for financial accounts.
 
 ---
 

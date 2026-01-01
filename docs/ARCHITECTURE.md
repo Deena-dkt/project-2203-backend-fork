@@ -11,11 +11,24 @@ com.apps.deen_sa
 │   │   ├── StateChangeTypeEnum
 │   │   ├── StateContainerEntity
 │   │   ├── StateContainerRepository
-│   │   └── CompletenessLevelEnum
+│   │   ├── StateContainerService
+│   │   ├── CompletenessLevelEnum
+│   │   └── cache
+│   │       ├── StateContainerCache
+│   │       └── InMemoryStateContainerCache
 │   └── mutation
 │       ├── StateMutationEntity
 │       ├── StateMutationRepository
-│       └── MutationTypeEnum
+│       ├── StateMutationService
+│       ├── MutationTypeEnum
+│       └── strategy
+│           ├── AdjustmentCommandFactory (creates StateMutationCommands)
+│           ├── StateMutationStrategyResolver
+│           ├── StateMutationStrategy
+│           ├── CreditSettlementStrategy
+│           ├── CashLikeStrategy
+│           ├── CreditCardStrategy
+│           └── LoanStrategy
 │
 ├── conversation (Conversational Orchestration)
 │   ├── SpeechOrchestrator
@@ -58,20 +71,8 @@ com.apps.deen_sa
 │   │   └── QueryContextFormatter
 │   │
 │   └── account
-│       ├── StateContainerService
-│       ├── StateMutationService
 │       ├── AccountSetupHandler
-│       ├── AccountSetupValidator
-│       ├── StateContainerCache
-│       ├── InMemoryStateContainerCache
-│       └── strategy
-│           ├── AdjustmentCommandFactory (creates StateMutationCommands)
-│           ├── StateMutationStrategyResolver
-│           ├── StateMutationStrategy
-│           ├── CreditSettlementStrategy
-│           ├── CashLikeStrategy
-│           ├── CreditCardStrategy
-│           └── LoanStrategy
+│       └── AccountSetupValidator
 │
 ├── food (Reserved for Future)
 │   ├── recipe (empty)

@@ -1,8 +1,8 @@
-package com.apps.deen_sa.finance.account.strategy;
+package com.apps.deen_sa.core.mutation.strategy;
 
 import com.apps.deen_sa.dto.StateMutationCommand;
 import com.apps.deen_sa.core.state.StateContainerEntity;
-import com.apps.deen_sa.finance.account.strategy.StateMutationStrategy;
+import com.apps.deen_sa.core.mutation.strategy.StateMutationStrategy;
 import org.springframework.stereotype.Component;
 
 @Component

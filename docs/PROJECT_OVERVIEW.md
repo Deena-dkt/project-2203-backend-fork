@@ -66,11 +66,24 @@ src/main/java/com/apps/deen_sa/
 │   │   ├── StateChangeTypeEnum.java
 │   │   ├── StateContainerEntity.java
 │   │   ├── StateContainerRepository.java
-│   │   └── CompletenessLevelEnum.java
+│   │   ├── StateContainerService.java
+│   │   ├── CompletenessLevelEnum.java
+│   │   └── cache/                      # State container caching
+│   │       ├── StateContainerCache.java
+│   │       └── InMemoryStateContainerCache.java
 │   └── mutation/                       # State mutation concepts
 │       ├── StateMutationEntity.java
 │       ├── StateMutationRepository.java
-│       └── MutationTypeEnum.java
+│       ├── StateMutationService.java
+│       ├── MutationTypeEnum.java
+│       └── strategy/                   # State mutation strategies
+│           ├── StateMutationStrategy.java
+│           ├── StateMutationStrategyResolver.java
+│           ├── AdjustmentCommandFactory.java (creates StateMutationCommands)
+│           ├── CreditSettlementStrategy.java
+│           ├── CashLikeStrategy.java
+│           ├── CreditCardStrategy.java
+│           └── LoanStrategy.java
 │
 ├── conversation/                        # 💬 CONVERSATION DOMAIN
 │   ├── SpeechOrchestrator.java        # Main conversation orchestrator
@@ -112,21 +125,9 @@ src/main/java/com/apps/deen_sa/
 │   │   ├── TimeRangeResolver.java
 │   │   └── QueryContextFormatter.java
 │   │
-│   └── account/                        # Account/container management
-│       ├── StateContainerService.java
-│       ├── StateMutationService.java
+│   └── account/                        # Account setup subdomain
 │       ├── AccountSetupHandler.java
-│       ├── AccountSetupValidator.java
-│       ├── StateContainerCache.java
-│       ├── InMemoryStateContainerCache.java
-│       └── strategy/                   # State mutation strategies
-│           ├── StateMutationStrategy.java
-│           ├── StateMutationStrategyResolver.java
-│           ├── AdjustmentCommandFactory.java (creates StateMutationCommands)
-│           ├── CreditSettlementStrategy.java
-│           ├── CashLikeStrategy.java
-│           ├── CreditCardStrategy.java
-│           └── LoanStrategy.java
+│       └── AccountSetupValidator.java
 │
 ├── food/                                # 🥘 FOOD DOMAIN (reserved for future)
 │   ├── recipe/                         # (empty)

@@ -1,4 +1,4 @@
-package com.apps.deen_sa.finance.account.strategy;
+package com.apps.deen_sa.core.mutation.strategy;
 
 import com.apps.deen_sa.core.state.StateContainerEntity;
 

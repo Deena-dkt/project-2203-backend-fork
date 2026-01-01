@@ -4,7 +4,7 @@ import com.apps.deen_sa.IntegrationTestBase;
 import com.apps.deen_sa.finance.account.AccountSetupHandler;
 import com.apps.deen_sa.finance.expense.ExpenseHandler;
 import com.apps.deen_sa.finance.payment.LiabilityPaymentHandler;
-import com.apps.deen_sa.finance.account.StateContainerService;
+import com.apps.deen_sa.core.state.StateContainerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;

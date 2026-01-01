@@ -7,7 +7,7 @@ import com.apps.deen_sa.core.state.StateChangeRepository;
 import com.apps.deen_sa.core.state.StateChangeTypeEnum;
 import com.apps.deen_sa.core.state.StateContainerEntity;
 import com.apps.deen_sa.dto.LiabilityPaymentDto;
-import com.apps.deen_sa.finance.account.StateContainerService;
+import com.apps.deen_sa.core.state.StateContainerService;
 import com.apps.deen_sa.llm.impl.LiabilityPaymentClassifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
