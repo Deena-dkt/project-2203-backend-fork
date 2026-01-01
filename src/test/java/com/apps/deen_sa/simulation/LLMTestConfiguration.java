@@ -26,15 +26,27 @@ public class LLMTestConfiguration {
         when(mock.extractAccount(anyString())).thenAnswer(invocation -> {
             String text = invocation.getArgument(0);
             // Expect SIM:ACCOUNT;type=...;name=...;current=...;date=YYYY-MM-DD
+            // Extended to support: limit=...;dueDay=...;currency=...
             AccountSetupDto dto = new AccountSetupDto();
             dto.setValid(true);
+            dto.setCurrency("INR"); // default
 
             String[] parts = text.split(";");
+            java.util.Map<String, Object> details = new java.util.HashMap<>();
+            
             for (String p : parts) {
                 if (p.startsWith("type=")) dto.setContainerType(p.substring(5));
                 if (p.startsWith("name=")) dto.setName(p.substring(5));
                 if (p.startsWith("current=")) dto.setCurrentValue(new BigDecimal(p.substring(8)));
+                if (p.startsWith("limit=")) dto.setCapacityLimit(new BigDecimal(p.substring(6)));
+                if (p.startsWith("dueDay=")) details.put("dueDay", Integer.parseInt(p.substring(7)));
+                if (p.startsWith("currency=")) dto.setCurrency(p.substring(9));
             }
+            
+            if (!details.isEmpty()) {
+                dto.setDetails(details);
+            }
+            
             return dto;
         });
         
@@ -48,15 +60,18 @@ public class LLMTestConfiguration {
         
         when(mock.extractExpense(anyString())).thenAnswer(invocation -> {
             String text = invocation.getArgument(0);
-            // SIM:EXPENSE;amount=1200;desc=Groceries;source=CREDIT_CARD;date=YYYY-MM-DD
+            // SIM:EXPENSE;amount=1200;desc=Groceries;source=CREDIT_CARD;category=Shopping;date=YYYY-MM-DD
             ExpenseDto dto = new ExpenseDto();
             dto.setValid(true);
+            dto.setCategory("GENERAL"); // Set default category
             String[] parts = text.split(";");
             for (String p : parts) {
                 if (p.startsWith("amount=")) dto.setAmount(new BigDecimal(p.substring(7)));
                 if (p.startsWith("desc=")) dto.setMerchantName(p.substring(5));
                 if (p.startsWith("source=")) dto.setSourceAccount(p.substring(7));
+                if (p.startsWith("category=")) dto.setCategory(p.substring(9));
                 if (p.startsWith("date=")) dto.setTransactionDate(LocalDate.parse(p.substring(5)));
+                if (p.startsWith("category=")) dto.setCategory(p.substring(9));
             }
             return dto;
         });

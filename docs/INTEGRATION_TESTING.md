@@ -83,6 +83,10 @@ All integration tests enforce the following financial invariants after each simu
 - `StateContainerRepositoryIT`: Basic database connectivity test
 - `MonthlySimulationIT`: Deterministic monthly financial scenarios
 - `FuzzSimulationIT`: Property-based randomized testing with reproducible seeds
+- `CreditCardLiabilityPaymentIT`: Comprehensive credit card liability payment tests
+  - Tests normal usage with full payment recovery
+  - Tests over-limit usage with partial payment recovery
+  - Validates proper use of `applyPayment()` instead of generic CREDIT mutations
 
 ## CI/CD
 
