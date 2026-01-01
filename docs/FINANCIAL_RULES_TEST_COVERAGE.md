@@ -51,6 +51,8 @@ This document maps documented financial rules to integration test coverage.
 
 **Test Coverage**:
 - ✅ `MonthlySimulationIT#runSimpleMonthlySimulation` - Tests credit card expenses and payments
+- ✅ `CreditCardLiabilityPaymentIT#creditCardUsageWithinLimit_thenFullPayment_restoresCapacity` - Tests full payment recovery
+- ✅ `CreditCardLiabilityPaymentIT#creditCardOverLimit_thenPartialPayment_remainingOutstanding` - Tests over-limit and partial payment
 - ✅ `FinancialAssertions.assertCapacityLimitsRespected()` - Enforces capacity limits on CREDIT_CARD and LOAN types
 
 **Expected Behavior**:
@@ -59,6 +61,10 @@ This document maps documented financial rules to integration test coverage.
 - Day 15: Payment ₹3,000 → outstanding = ₹200
 
 **Verified**: Test confirms final outstanding = ₹200
+
+**New Comprehensive Tests** (CreditCardLiabilityPaymentIT):
+1. **Normal Usage → Full Recovery**: 10 expenses within 50,000 limit, full payment restores capacity to 0 outstanding
+2. **Over-Limit → Partial Recovery**: 13 expenses totaling 62,000 (exceeding 50,000 limit), partial payment of 30,000 reduces outstanding to 32,000 and clears over-limit flag
 
 ---
 
@@ -235,11 +241,79 @@ mvn verify -Pintegration -Dtest=FuzzSimulationIT#testReproduceSeed -Dfuzz.seed=1
 
 ---
 
+## Credit Card Liability Payment Tests (NEW)
+
+**Test Class**: `CreditCardLiabilityPaymentIT`
+
+These comprehensive integration tests enforce real-world credit card usage patterns including limit pressure and partial recovery.
+
+### Test 1: Normal Usage → Full Recovery
+**Method**: `creditCardUsageWithinLimit_thenFullPayment_restoresCapacity`
+
+**Scenario**:
+- CREDIT_CARD container: creditLimit = 50,000, initial outstanding = 0
+- BANK_ACCOUNT container: balance = 200,000
+- User makes 10 credit card expenses totaling 35,000 (within limit)
+- User pays FULL outstanding from bank transfer
+
+**Assertions**:
+1. ✅ Credit card outstanding = 0
+2. ✅ Credit card available capacity = full credit limit (50,000)
+3. ✅ Bank balance reduced by EXACT total outstanding
+4. ✅ No over-limit flag is set
+5. ✅ Transaction marked financiallyApplied
+6. ✅ No generic CREDIT mutation used for payment (uses applyPayment())
+7. ✅ All financial invariants pass
+
+**Purpose**: Validates that full payment properly restores credit card capacity and uses the correct payment mechanism (applyPayment) instead of generic credit mutations.
+
+### Test 2: Over-Limit Usage → Partial Recovery
+**Method**: `creditCardOverLimit_thenPartialPayment_remainingOutstanding`
+
+**Scenario**:
+- CREDIT_CARD container: creditLimit = 50,000, initial outstanding = 0
+- BANK_ACCOUNT container: balance = 200,000
+- User makes 13 credit card expenses totaling 62,000 (exceeding limit)
+- Credit card goes into OVER_LIMIT state
+- User pays PARTIAL amount (30,000) from bank transfer
+
+**Assertions**:
+1. ✅ Credit card outstanding = 32,000 (62,000 - 30,000)
+2. ✅ Credit card is still NOT fully settled
+3. ✅ Over-limit flag cleared (32,000 <= 50,000 limit)
+4. ✅ Bank balance reduced by 30,000
+5. ✅ No intermediate increase in outstanding during payment
+6. ✅ No generic CREDIT mutation used for payment (uses applyPayment())
+7. ✅ Transaction marked financiallyApplied
+8. ✅ All financial invariants pass
+
+**Purpose**: Validates over-limit behavior, partial payment handling, and proper over-limit flag management.
+
+### Key Validations
+
+**These tests MUST FAIL with old logic** (credit + applyPayment):
+- Old approach: Would use generic CREDIT mutation, potentially not clearing over-limit flags correctly
+- New approach: Uses specialized `applyPayment()` method that properly reduces outstanding and manages over-limit state
+
+**These tests MUST PASS only when**:
+- `LiabilityPaymentHandler` uses `CreditSettlementStrategy.applyPayment()`
+- Payments go through proper LIABILITY payment flow, not generic credit mutations
+- Over-limit flags are correctly managed based on outstanding vs. limit
+
+**Integration Test Properties**:
+- ✅ Uses real handlers (ExpenseHandler, LiabilityPaymentHandler)
+- ✅ Uses real repositories and PostgreSQL (Testcontainers)
+- ✅ No mocking
+- ✅ Enforces all 8 financial invariants
+- ✅ Tests catch semantic regressions, not just math errors
+
+---
+
 ## Conclusion
 
 The integration test suite provides comprehensive coverage of all documented financial rules. The combination of:
 
-1. Explicit scenario tests (`MonthlySimulationIT`)
+1. Explicit scenario tests (`MonthlySimulationIT`, `CreditCardLiabilityPaymentIT`)
 2. Idempotency tests  
 3. Fuzz testing with 50+ randomized scenarios
 4. 8 comprehensive financial invariants checked after every simulation
