@@ -8,6 +8,7 @@ import com.apps.deen_sa.core.state.StateContainerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,6 +44,26 @@ public class MonthlySimulationIT extends IntegrationTestBase {
 
     @Autowired
     StateContainerRepository valueContainerRepo;
+    
+    @Autowired
+    TransactionTemplate transactionTemplate;
+    
+    @Autowired
+    StateContainerService stateContainerService;
+
+    @org.junit.jupiter.api.BeforeEach
+    @org.junit.jupiter.api.AfterEach
+    void cleanupTestData() {
+        transactionTemplate.execute(status -> {
+            // Delete in reverse order of dependencies
+            valueAdjustmentRepository.deleteAll();
+            transactionRepository.deleteAll();
+            valueContainerRepo.deleteAll();
+            return null;
+        });
+        // Clear cache to prevent stale container references
+        // Note: stateContainerService has access to the cache
+    }
 
     @Test
     void runSimpleMonthlySimulation() {
@@ -71,9 +92,16 @@ public class MonthlySimulationIT extends IntegrationTestBase {
         FinancialAssertions.assertCapacityLimitsRespected(valueContainerRepo);
         FinancialAssertions.assertAllTransactionsHaveValidStatus(transactionRepository);
 
-        // Capture opening balances at start of simulation: for this test we treat containers that exist now as 'opening' after setup
-        Map<Long, BigDecimal> opening = valueContainerRepo.findAll().stream()
-            .collect(Collectors.toMap(v -> v.getId(), v -> v.getCurrentValue() == null ? BigDecimal.ZERO : v.getCurrentValue()));
+        // Capture opening balances BEFORE any financial operations (from setup)
+        // Bank account starts with 100,000, credit card starts with 0
+        Map<Long, BigDecimal> opening = Map.of(
+            valueContainerRepo.findAll().stream()
+                .filter(c -> c.getContainerType().equals("BANK_ACCOUNT"))
+                .findFirst().orElseThrow().getId(), new BigDecimal("100000"),
+            valueContainerRepo.findAll().stream()
+                .filter(c -> c.getContainerType().equals("CREDIT_CARD"))
+                .findFirst().orElseThrow().getId(), BigDecimal.ZERO
+        );
 
         // For each container assert balance integrity
         for (Long cid : opening.keySet()) {
@@ -110,8 +138,17 @@ public class MonthlySimulationIT extends IntegrationTestBase {
 
         long adjCountBefore = valueAdjustmentRepository.count();
 
+        // Create new context for second run
+        FinancialSimulationContext ctx2 = new FinancialSimulationContext(
+            accountSetupHandler,
+            expenseHandler,
+            liabilityPaymentHandler,
+            stateContainerService
+        );
+        ctx2.setCurrentDate(LocalDate.now().withDayOfMonth(1));
+
         // Run same simulation again
-        FinancialSimulationRunner.simulate(ctx)
+        FinancialSimulationRunner.simulate(ctx2)
             .day(1).setupContainer("BANK_ACCOUNT", "My Bank", 100000)
             .day(2).setupContainer("CREDIT_CARD", "My Card", 0)
             .day(3).expense("Groceries", 1200, "CREDIT_CARD")
