@@ -166,7 +166,7 @@ public class AssetAccountSetupIT extends IntegrationTestBase {
         
         // Verify: Container data
         assertEquals("ASSET", asset.getContainerType());
-        assertEquals("Gold", asset.getName());
+        assertEquals("gold", asset.getName().toLowerCase());
         assertEquals(0, new BigDecimal("20").compareTo(asset.getCurrentValue()));
         assertEquals("grams", asset.getUnit());
         

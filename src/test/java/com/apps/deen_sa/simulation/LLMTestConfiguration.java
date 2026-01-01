@@ -1,9 +1,11 @@
 package com.apps.deen_sa.simulation;
 
 import com.apps.deen_sa.dto.AccountSetupDto;
+import com.apps.deen_sa.dto.AssetDto;
 import com.apps.deen_sa.dto.ExpenseDto;
 import com.apps.deen_sa.dto.LiabilityPaymentDto;
 import com.apps.deen_sa.llm.impl.AccountSetupClassifier;
+import com.apps.deen_sa.llm.impl.AssetClassifier;
 import com.apps.deen_sa.llm.impl.ExpenseClassifier;
 import com.apps.deen_sa.llm.impl.LiabilityPaymentClassifier;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -106,6 +108,108 @@ public class LLMTestConfiguration {
                 if (p.startsWith("target=")) dto.setTargetLiability(p.substring(7).trim());
             }
             return dto;
+        });
+        
+        return mock;
+    }
+
+    @Bean
+    @Primary
+    public AssetClassifier assetClassifier() {
+        AssetClassifier mock = mock(AssetClassifier.class);
+        
+        when(mock.extractAsset(anyString())).thenAnswer(invocation -> {
+            String text = invocation.getArgument(0);
+            AssetDto dto = new AssetDto();
+            
+            // Simple parsing for common asset declarations
+            String lowerText = text.toLowerCase();
+            
+            if (lowerText.contains("shares") || lowerText.contains("units") || lowerText.contains("grams") || lowerText.contains("gold")) {
+                dto.setValid(true);
+                
+                // Extract quantity (look for numbers)
+                String[] words = text.split("\\s+");
+                BigDecimal quantity = null;
+                int quantityIndex = -1;
+                
+                for (int i = 0; i < words.length; i++) {
+                    try {
+                        quantity = new BigDecimal(words[i]);
+                        quantityIndex = i;
+                        dto.setQuantity(quantity);
+                        break;
+                    } catch (NumberFormatException e) {
+                        // Continue searching
+                    }
+                }
+                
+                // Extract asset identifier
+                if (quantityIndex >= 0 && quantityIndex < words.length - 1) {
+                    String nextWord = words[quantityIndex + 1];
+                    String lowerNextWord = nextWord.toLowerCase();
+                    
+                    // Handle different patterns:
+                    // "100 ITC shares" -> ITC is identifier
+                    // "50 units of SBI Bluechip" -> SBI Bluechip is identifier
+                    // "20 grams of gold" -> gold is identifier
+                    
+                    if (lowerNextWord.equals("units") || lowerNextWord.equals("grams") || lowerNextWord.equals("shares")) {
+                        // Unit comes right after number, look for identifier after unit
+                        // Could be "100 shares" (no identifier yet) or "100 shares ITC" (rare)
+                        // Most common: identifier comes BEFORE quantity like "ITC shares"
+                        // But our test cases have identifier AFTER quantity
+                        // Actually, let's look for pattern: number + identifier + unit
+                        // OR: number + unit + "of" + identifier
+                        if (quantityIndex < words.length - 2) {
+                            String afterUnit = words[quantityIndex + 2];
+                            if (afterUnit.equalsIgnoreCase("of") && quantityIndex < words.length - 3) {
+                                // "50 units of SBI Bluechip mutual fund"
+                                StringBuilder identifier = new StringBuilder();
+                                for (int i = quantityIndex + 3; i < words.length; i++) {
+                                    String word = words[i];
+                                    if (word.equalsIgnoreCase("mutual") || word.equalsIgnoreCase("fund")) {
+                                        break;
+                                    }
+                                    if (identifier.length() > 0) identifier.append(" ");
+                                    identifier.append(word);
+                                }
+                                if (identifier.length() > 0) {
+                                    dto.setAssetIdentifier(identifier.toString());
+                                }
+                            }
+                        }
+                    } else if (lowerNextWord.equals("of")) {
+                        // "20 of gold" pattern - identifier after "of"
+                        if (quantityIndex < words.length - 2) {
+                            dto.setAssetIdentifier(words[quantityIndex + 2]);
+                        }
+                    } else {
+                        // "100 ITC shares" - identifier is right after number
+                        dto.setAssetIdentifier(nextWord);
+                    }
+                }
+                
+                // Extract unit
+                if (lowerText.contains("shares")) dto.setUnit("shares");
+                else if (lowerText.contains("units")) dto.setUnit("units");
+                else if (lowerText.contains("grams")) dto.setUnit("grams");
+                
+            } else {
+                dto.setValid(false);
+                dto.setReason("Could not extract asset details");
+            }
+            
+            return dto;
+        });
+        
+        when(mock.generateFollowupQuestion(anyString())).thenAnswer(invocation -> {
+            String field = invocation.getArgument(0);
+            return switch (field) {
+                case "broker" -> "Which broker or platform is this asset held in?";
+                case "investedAmount" -> "Do you remember roughly how much you invested in this?";
+                default -> "Could you provide more details about " + field + "?";
+            };
         });
         
         return mock;
