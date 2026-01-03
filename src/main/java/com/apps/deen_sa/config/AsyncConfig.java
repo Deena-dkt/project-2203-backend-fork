@@ -21,4 +21,19 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * Executor for processing intents from the inbox.
+     * Phase 2: Async Processing Engine
+     */
+    @Bean
+    public Executor intentProcessingExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(3);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("intent-processor-");
+        executor.initialize();
+        return executor;
+    }
 }
